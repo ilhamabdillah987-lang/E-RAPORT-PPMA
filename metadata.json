@@ -1,0 +1,6 @@
+{
+  "name": "Aplikasi Raport Pesantren Modern Al-Hikmah",
+  "description": "Sistem Informasi Raport Digital Pondok Pesantren Modern Al-Hikmah dengan input nilai, cetak raport lengkap, import/export, dan sinkronisasi Google Sheets",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
