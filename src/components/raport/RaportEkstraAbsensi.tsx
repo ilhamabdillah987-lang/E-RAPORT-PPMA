@@ -114,13 +114,17 @@ export const RaportEkstraAbsensi: React.FC<RaportEkstraAbsensiProps> = ({
       </div>
 
       {/* Signature Section */}
-      <div className="mt-16 pt-8 grid grid-cols-2 gap-8 text-xs text-black">
+      <div className="mt-16 pt-8 grid grid-cols-2 gap-8 text-xs sm:text-sm text-black">
         {/* Left: Orang Tua */}
         <div className="text-center flex flex-col items-center">
           <p className="font-bold">Mengetahui,</p>
           <p className="font-bold">Orang Tua/Wali Santri</p>
-          <div className="h-28 flex items-end">
-            <div className="w-48 border-b-2 border-dashed border-black"></div>
+          <div className="h-24 sm:h-28 flex flex-col justify-end items-center">
+            <div className="flex items-center text-xs sm:text-sm font-bold text-black">
+              <span>(</span>
+              <span className="w-48 border-b-2 border-black mx-1 inline-block"></span>
+              <span>)</span>
+            </div>
           </div>
         </div>
 
@@ -130,11 +134,15 @@ export const RaportEkstraAbsensi: React.FC<RaportEkstraAbsensiProps> = ({
             {settings.kotaCetak || 'Tangerang'}, {settings.tanggalCetak || '20 Desember 2025'}
           </p>
           <p className="font-bold">Wali Kelas,</p>
-          <div className="h-28 flex flex-col justify-end items-center">
-            <div className="w-48 border-b-2 border-dashed border-black mb-1"></div>
-            <p className="font-bold uppercase text-[11px]">
+          <div className="h-24 sm:h-28 flex flex-col justify-end items-center">
+            <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
               {settings.namaWaliKelas || 'Wali Kelas 7 MTS PUTRA'}
             </p>
+            {settings.nipWaliKelas ? (
+              <p className="text-[11px] font-semibold text-slate-700 mt-1">
+                NIP. {settings.nipWaliKelas}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Santri, MataPelajaran, NilaiSantri, RaportSettings } from '../types';
 import { exportAllDataXLSX, exportSantriTemplate, exportNilaiTemplate } from '../utils/googleSheets';
@@ -15,8 +15,28 @@ import {
   Filter,
   ArrowDownToLine,
   Eye,
+  ExternalLink,
+  PlusCircle,
+  RefreshCw,
+  UploadCloud,
+  ShieldCheck,
+  LogOut,
+  AlertCircle,
 } from 'lucide-react';
 import { PrintRaportView } from './PrintRaportView';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
+import {
+  initGoogleAuth,
+  signInWithGoogle,
+  googleSignOut,
+  getCachedAccessToken,
+} from '../services/googleAuth';
+import {
+  createNewRaportSpreadsheet,
+  writeAllDataToSpreadsheet,
+  extractSpreadsheetId,
+} from '../services/googleSheetsApi';
+import { User } from 'firebase/auth';
 
 interface DownloadDataRaportViewProps {
   santriList: Santri[];
@@ -32,8 +52,75 @@ export const DownloadDataRaportView: React.FC<DownloadDataRaportViewProps> = ({
   settings,
 }) => {
   const [selectedClass, setSelectedClass] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'excel' | 'pdf' | 'backup'>('excel');
+  const [activeTab, setActiveTab] = useState<'excel' | 'pdf' | 'sheets' | 'backup'>('excel');
   const [downloadSuccessMsg, setDownloadSuccessMsg] = useState<string>('');
+
+  // Google Auth State
+  const [googleUser, setGoogleUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isProcessingSheets, setIsProcessingSheets] = useState(false);
+  const [sheetsTargetId, setSheetsTargetId] = useState<string>(
+    localStorage.getItem('alhikmah_active_sheet_id') || ''
+  );
+  const [sheetsFeedback, setSheetsFeedback] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
+
+  // Confirmation dialog
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  useEffect(() => {
+    const unsub = initGoogleAuth(
+      (user, token) => {
+        setGoogleUser(user);
+        setAccessToken(token);
+      },
+      () => {
+        setGoogleUser(null);
+        setAccessToken(null);
+      }
+    );
+    return () => {
+      if (unsub) unsub();
+    };
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    setIsSigningIn(true);
+    setSheetsFeedback(null);
+    try {
+      const res = await signInWithGoogle();
+      if (res) {
+        setGoogleUser(res.user);
+        setAccessToken(res.accessToken);
+        setSheetsFeedback({
+          type: 'success',
+          message: `Berhasil terhubung ke akun Google: ${res.user.email}`,
+        });
+      }
+    } catch (e: any) {
+      setSheetsFeedback({
+        type: 'error',
+        message: `Gagal login Google: ${e.message || e}`,
+      });
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  const handleGoogleLogout = async () => {
+    await googleSignOut();
+    setGoogleUser(null);
+    setAccessToken(null);
+  };
 
   // Extract unique classes
   const availableClasses = Array.from(
@@ -270,6 +357,19 @@ export const DownloadDataRaportView: React.FC<DownloadDataRaportViewProps> = ({
         >
           <FileSpreadsheet className="w-4 h-4" />
           Unduh File Excel (.xlsx)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('sheets')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-xs cursor-pointer transition-all ${
+            activeTab === 'sheets'
+              ? 'bg-emerald-700 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+          Simpan ke Google Sheets (Drive)
         </button>
 
         <button
@@ -516,6 +616,225 @@ export const DownloadDataRaportView: React.FC<DownloadDataRaportViewProps> = ({
         </div>
       )}
 
+      {/* TAB: GOOGLE SHEETS CLOUD SYNC */}
+      {activeTab === 'sheets' && (
+        <div className="bg-white p-7 rounded-3xl border border-slate-200 shadow-xs space-y-6 animate-in fade-in">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                  Google Workspace
+                </span>
+                <span className="text-xs text-slate-400">•</span>
+                <span className="text-xs font-semibold text-slate-600">Google Drive & Sheets API</span>
+              </div>
+              <h3 className="text-base font-black text-slate-900 uppercase">
+                Simpan Langsung ke Google Sheets
+              </h3>
+              <p className="text-xs text-slate-500">
+                Ekspor data santri ({filteredSantri.length} Santri) dan legger nilai langsung ke spreadsheet di Google Drive Anda.
+              </p>
+            </div>
+
+            {googleUser ? (
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <div className="text-xs font-bold text-slate-900">{googleUser.displayName || 'Akun Google'}</div>
+                  <div className="text-[11px] text-slate-500">{googleUser.email}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGoogleLogout}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5 inline mr-1" />
+                  Keluar
+                </button>
+              </div>
+            ) : (
+              <GoogleSignInButton
+                onClick={handleGoogleLogin}
+                loading={isSigningIn}
+                text="Masuk dengan Google"
+              />
+            )}
+          </div>
+
+          {sheetsFeedback && (
+            <div
+              className={`p-4 rounded-2xl flex items-center gap-3 text-xs font-semibold ${
+                sheetsFeedback.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-900 border border-rose-200'
+              }`}
+            >
+              {sheetsFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              )}
+              <span>{sheetsFeedback.message}</span>
+            </div>
+          )}
+
+          {googleUser ? (
+            <div className="space-y-6">
+              {/* Option 1: Create New */}
+              <div className="bg-linear-to-r from-emerald-800 to-teal-900 text-white p-6 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-black text-sm">Buat Spreadsheet Raport Baru Otomatis</h4>
+                  <p className="text-xs text-emerald-100/90 mt-1">
+                    Membuat berkas Google Sheet baru di Drive Anda yang berisi Buku Induk ({filteredSantri.length} santri), Legger Nilai, dan Pengaturan.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isProcessingSheets}
+                  onClick={() => {
+                    const token = accessToken || getCachedAccessToken();
+                    if (!token) {
+                      setSheetsFeedback({ type: 'error', message: 'Silakan masuk dengan Google terlebih dahulu' });
+                      return;
+                    }
+                    setConfirmDialog({
+                      isOpen: true,
+                      title: 'Buat Spreadsheet Raport Baru di Drive?',
+                      description: `Sistem akan membuat file spreadsheet baru di Google Drive Anda untuk kelas ${selectedClass === 'all' ? 'Semua Kelas' : selectedClass} (${filteredSantri.length} Santri).`,
+                      confirmLabel: 'Ya, Buat File',
+                      onConfirm: async () => {
+                        setConfirmDialog(null);
+                        setIsProcessingSheets(true);
+                        setSheetsFeedback(null);
+                        try {
+                          const res = await createNewRaportSpreadsheet(
+                            token,
+                            `Raport Santri - ${selectedClass === 'all' ? 'Semua Kelas' : selectedClass} (${settings.tahunPelajaran.replace('/', '-')})`,
+                            filteredSantri,
+                            mapelList,
+                            nilaiMap,
+                            settings
+                          );
+                          setSheetsTargetId(res.spreadsheetId);
+                          localStorage.setItem('alhikmah_active_sheet_id', res.spreadsheetId);
+                          setSheetsFeedback({
+                            type: 'success',
+                            message: `Spreadsheet baru berhasil dibuat! ID: ${res.spreadsheetId}`,
+                          });
+                        } catch (err: any) {
+                          setSheetsFeedback({
+                            type: 'error',
+                            message: `Gagal membuat spreadsheet: ${err.message || err}`,
+                          });
+                        } finally {
+                          setIsProcessingSheets(false);
+                        }
+                      },
+                    });
+                  }}
+                  className="px-5 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 font-black rounded-xl text-xs cursor-pointer transition-all shrink-0 flex items-center gap-2 shadow-md disabled:opacity-50"
+                >
+                  {isProcessingSheets ? <RefreshCw className="w-4 h-4 animate-spin text-emerald-700" /> : <PlusCircle className="w-4 h-4 text-emerald-700" />}
+                  Buat di Google Drive
+                </button>
+              </div>
+
+              {/* Option 2: Existing Spreadsheet Target */}
+              <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <label className="block text-xs font-bold text-slate-700 uppercase">
+                  Atau Perbarui Spreadsheet Yang Sudah Ada (ID / URL):
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={sheetsTargetId}
+                    onChange={(e) => {
+                      setSheetsTargetId(e.target.value);
+                      const clean = extractSpreadsheetId(e.target.value);
+                      if (clean) localStorage.setItem('alhikmah_active_sheet_id', clean);
+                    }}
+                    placeholder="Masukkan ID atau paste tautan URL Spreadsheet"
+                    className="flex-1 px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-emerald-600"
+                  />
+                  {sheetsTargetId && (
+                    <a
+                      href={`https://docs.google.com/spreadsheets/d/${extractSpreadsheetId(sheetsTargetId)}/edit`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 shrink-0"
+                    >
+                      <ExternalLink className="w-4 h-4 text-slate-500" />
+                      Buka di Sheets
+                    </a>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isProcessingSheets || !sheetsTargetId}
+                  onClick={() => {
+                    const token = accessToken || getCachedAccessToken();
+                    const clean = extractSpreadsheetId(sheetsTargetId);
+                    if (!token || !clean) return;
+                    setConfirmDialog({
+                      isOpen: true,
+                      title: 'Perbarui Data ke Spreadsheet?',
+                      description: `Data santri (${filteredSantri.length} Santri) dan legger nilai akan disimpan dan memperbarui spreadsheet ${clean}.`,
+                      confirmLabel: 'Ya, Simpan ke Spreadsheet',
+                      onConfirm: async () => {
+                        setConfirmDialog(null);
+                        setIsProcessingSheets(true);
+                        setSheetsFeedback(null);
+                        try {
+                          await writeAllDataToSpreadsheet(
+                            token,
+                            clean,
+                            filteredSantri,
+                            mapelList,
+                            nilaiMap,
+                            settings
+                          );
+                          setSheetsFeedback({
+                            type: 'success',
+                            message: 'Data santri dan legger nilai berhasil disimpan ke Google Spreadsheet!',
+                          });
+                        } catch (err: any) {
+                          setSheetsFeedback({
+                            type: 'error',
+                            message: `Gagal memperbarui spreadsheet: ${err.message || err}`,
+                          });
+                        } finally {
+                          setIsProcessingSheets(false);
+                        }
+                      },
+                    });
+                  }}
+                  className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs cursor-pointer transition-all flex items-center gap-2 shadow-xs disabled:opacity-50"
+                >
+                  {isProcessingSheets ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                  Simpan ke Google Spreadsheet Ini
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-8 bg-slate-50 rounded-2xl border border-slate-200 text-center space-y-3">
+              <FileSpreadsheet className="w-10 h-10 text-emerald-700 mx-auto" />
+              <div className="text-xs font-bold text-slate-700">Hubungkan Akun Google untuk Menggunakan Fitur Ini</div>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Masuk dengan akun Google Anda untuk menyimpan data raport langsung ke Google Sheets di Google Drive pribadi Anda.
+              </p>
+              <div className="pt-2">
+                <GoogleSignInButton
+                  onClick={handleGoogleLogin}
+                  loading={isSigningIn}
+                  text="Masuk dengan Google"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TAB 3: BACKUP DATABASE */}
       {activeTab === 'backup' && (
         <div className="bg-white p-7 rounded-3xl border border-slate-200 shadow-xs space-y-6 animate-in fade-in">
@@ -546,6 +865,43 @@ export const DownloadDataRaportView: React.FC<DownloadDataRaportViewProps> = ({
               <Database className="w-4 h-4 text-emerald-400" />
               Unduh File Cadangan (JSON)
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog Modal */}
+      {confirmDialog && confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 text-emerald-800">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5 text-emerald-700" />
+              </div>
+              <h3 className="text-sm font-black text-slate-900 uppercase">
+                {confirmDialog.title}
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              {confirmDialog.description}
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-all"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs transition-all"
+              >
+                {confirmDialog.confirmLabel}
+              </button>
+            </div>
           </div>
         </div>
       )}
