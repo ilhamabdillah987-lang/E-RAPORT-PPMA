@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { AppUser, RaportSettings } from '../types';
+import React, { useState, useMemo } from 'react';
+import { AppUser, RaportSettings, MataPelajaran } from '../types';
+import { DEFAULT_MAPEL } from '../data/defaultData';
 import {
   UserPlus,
   Users,
@@ -18,12 +19,15 @@ import {
   UserCheck,
   Search,
   Filter,
+  BookOpen,
+  GraduationCap,
 } from 'lucide-react';
 
 interface UserManagementViewProps {
   users: AppUser[];
   currentUser: AppUser;
   settings: RaportSettings;
+  mapelList?: MataPelajaran[];
   onAddUser: (user: AppUser) => void;
   onUpdateUser: (user: AppUser) => void;
   onDeleteUser: (id: string) => void;
@@ -49,6 +53,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   users,
   currentUser,
   settings,
+  mapelList = DEFAULT_MAPEL,
   onAddUser,
   onUpdateUser,
   onDeleteUser,
@@ -71,10 +76,16 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   const [role, setRole] = useState<'walikelas' | 'guru' | 'admin'>('walikelas');
   const [kelasAkses, setKelasAkses] = useState('7 MTS PUTRA');
   const [customKelas, setCustomKelas] = useState('');
+  const [selectedMapelIds, setSelectedMapelIds] = useState<string[]>([]);
 
   // Feedback states
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Categories of mata pelajaran
+  const categories = useMemo(() => {
+    return Array.from(new Set(mapelList.map((m) => m.kategori)));
+  }, [mapelList]);
 
   // Quick password generator
   const generateRandomPassword = () => {
@@ -93,8 +104,9 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     setUsername('');
     setPassword(generateRandomPassword());
     setShowPassword(true);
-    setKelasAkses('7 MTS PUTRA');
+    setKelasAkses(defaultRole === 'guru' ? 'Semua Kelas' : '7 MTS PUTRA');
     setCustomKelas('');
+    setSelectedMapelIds([]);
     setIsCreateModalOpen(true);
   };
 
@@ -106,7 +118,16 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
       return;
     }
 
+    if (role === 'guru' && selectedMapelIds.length === 0) {
+      if (!window.confirm('Anda belum mencentang mata pelajaran yang diajar untuk guru ini. Tetap simpan? (Mata pelajaran dapat ditentukan nanti)')) {
+        return;
+      }
+    }
+
     const assigned = kelasAkses === 'LAINNYA' ? customKelas.trim() : kelasAkses;
+    const mapelNames = mapelList
+      .filter((m) => selectedMapelIds.includes(m.id))
+      .map((m) => m.nama);
 
     const newUser: AppUser = {
       id: 'user-' + Date.now(),
@@ -116,19 +137,40 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
       namaLengkap: namaLengkap.trim(),
       nip: nip.trim() || undefined,
       role: role,
-      assignedClass: role === 'walikelas' ? assigned : undefined,
-      kelasAkses: role === 'walikelas' ? assigned : undefined,
+      assignedClass: role === 'walikelas' ? assigned : role === 'guru' ? assigned : undefined,
+      kelasAkses: role === 'walikelas' ? assigned : role === 'guru' ? assigned : undefined,
+      assignedMapelIds: role === 'guru' ? selectedMapelIds : undefined,
+      mapelAkses: role === 'guru' ? mapelNames : undefined,
       createdAt: new Date().toISOString(),
     };
 
     onAddUser(newUser);
     setIsCreateModalOpen(false);
-    setSuccessMsg(`Akun ${newUser.role === 'walikelas' ? 'Wali Kelas' : 'Pengguna'} "${newUser.namaLengkap}" (Username: ${newUser.username}) berhasil dibuat!`);
+    setSuccessMsg(
+      `Akun ${
+        newUser.role === 'walikelas'
+          ? 'Wali Kelas'
+          : newUser.role === 'guru'
+          ? 'Guru Pengajar'
+          : 'Administrator'
+      } "${newUser.namaLengkap}" (Username: ${newUser.username}) berhasil dibuat!`
+    );
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
   const handleOpenEditModal = (user: AppUser) => {
-    setEditingUser({ ...user });
+    // If assignedMapelIds is not set yet, but mapelAkses (names) are, sync them
+    let initialMapelIds = user.assignedMapelIds || [];
+    if (initialMapelIds.length === 0 && user.mapelAkses && user.mapelAkses.length > 0) {
+      initialMapelIds = mapelList
+        .filter((m) => user.mapelAkses?.includes(m.nama))
+        .map((m) => m.id);
+    }
+
+    setEditingUser({
+      ...user,
+      assignedMapelIds: initialMapelIds,
+    });
   };
 
   const handleSaveEditUser = (e: React.FormEvent) => {
@@ -137,12 +179,19 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
     // Check duplicate username if changed
     const duplicate = users.find(
-      (u) => u.id !== editingUser.id && u.username.toLowerCase() === editingUser.username.trim().toLowerCase()
+      (u) =>
+        u.id !== editingUser.id &&
+        u.username.toLowerCase() === editingUser.username.trim().toLowerCase()
     );
     if (duplicate) {
       alert('Username tersebut sudah digunakan oleh akun lain.');
       return;
     }
+
+    const currentMapelIds = editingUser.assignedMapelIds || [];
+    const mapelNames = mapelList
+      .filter((m) => currentMapelIds.includes(m.id))
+      .map((m) => m.nama);
 
     const updatedUser: AppUser = {
       ...editingUser,
@@ -150,8 +199,16 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
       password: editingUser.password.trim(),
       fullName: (editingUser.namaLengkap || editingUser.fullName).trim(),
       namaLengkap: (editingUser.namaLengkap || editingUser.fullName).trim(),
-      assignedClass: editingUser.role === 'walikelas' ? (editingUser.kelasAkses || editingUser.assignedClass) : undefined,
-      kelasAkses: editingUser.role === 'walikelas' ? (editingUser.kelasAkses || editingUser.assignedClass) : undefined,
+      assignedClass:
+        editingUser.role === 'walikelas' || editingUser.role === 'guru'
+          ? editingUser.kelasAkses || editingUser.assignedClass
+          : undefined,
+      kelasAkses:
+        editingUser.role === 'walikelas' || editingUser.role === 'guru'
+          ? editingUser.kelasAkses || editingUser.assignedClass
+          : undefined,
+      assignedMapelIds: editingUser.role === 'guru' ? currentMapelIds : undefined,
+      mapelAkses: editingUser.role === 'guru' ? mapelNames : undefined,
     };
 
     onUpdateUser(updatedUser);
@@ -161,10 +218,34 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   };
 
   const handleCopyCredentials = (user: AppUser) => {
-    const text = `*AKUN RAPORT PONDOK PESANTREN AL-HIKMAH*\n` +
+    const mapelInfo =
+      user.role === 'guru'
+        ? `Mata Pelajaran: ${
+            user.mapelAkses && user.mapelAkses.length > 0
+              ? user.mapelAkses.join(', ')
+              : user.assignedMapelIds && user.assignedMapelIds.length > 0
+              ? mapelList
+                  .filter((m) => user.assignedMapelIds?.includes(m.id))
+                  .map((m) => m.nama)
+                  .join(', ')
+              : 'Semua / Belum diatur'
+          }\n`
+        : '';
+
+    const text =
+      `*AKUN RAPORT PONDOK PESANTREN AL-HIKMAH*\n` +
       `Nama: ${user.namaLengkap || user.fullName}\n` +
-      `Peran: ${user.role === 'walikelas' ? 'Wali Kelas' : user.role === 'admin' ? 'Administrator' : 'Guru Pengajar'}\n` +
-      (user.role === 'walikelas' ? `Kelas Binaan: ${user.kelasAkses || user.assignedClass || '-'}\n` : '') +
+      `Peran: ${
+        user.role === 'walikelas'
+          ? 'Wali Kelas'
+          : user.role === 'admin'
+          ? 'Administrator'
+          : 'Guru Pengajar'
+      }\n` +
+      (user.role === 'walikelas'
+        ? `Kelas Binaan: ${user.kelasAkses || user.assignedClass || '-'}\n`
+        : '') +
+      mapelInfo +
       `Username: ${user.username}\n` +
       `Password: ${user.password}\n` +
       `Aplikasi: Raport Digital Santri`;
@@ -180,12 +261,16 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     const name = (u.namaLengkap || u.fullName || '').toLowerCase();
     const uname = u.username.toLowerCase();
     const kls = (u.kelasAkses || u.assignedClass || '').toLowerCase();
+    const mapel = (u.mapelAkses || []).join(' ').toLowerCase();
     const q = searchQuery.toLowerCase().trim();
-    const matchSearch = !q || name.includes(q) || uname.includes(q) || kls.includes(q);
+    const matchSearch =
+      !q || name.includes(q) || uname.includes(q) || kls.includes(q) || mapel.includes(q);
     return matchRole && matchSearch;
   });
 
   const totalWaliKelas = users.filter((u) => u.role === 'walikelas').length;
+  const totalGuru = users.filter((u) => u.role === 'guru').length;
+  const totalAdmin = users.filter((u) => u.role === 'admin').length;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -198,33 +283,33 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             </span>
             <span className="text-xs text-slate-400">•</span>
             <span className="text-xs font-semibold text-slate-600">
-              {totalWaliKelas} Wali Kelas Terdaftar
+              {users.length} Akun Terdaftar ({totalWaliKelas} Wali Kelas, {totalGuru} Guru)
             </span>
           </div>
           <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">
-            Input Wali Kelas Baru & Pembuatan Akun
+            Manajemen Akun Guru, Wali Kelas & Akses
           </h2>
           <p className="text-xs text-slate-500 font-medium">
-            Input data wali kelas baru sekaligus membuatkan username & password untuk akses sistem raport.
+            Buatkan username & password untuk Guru Pengajar dan Wali Kelas serta tentukan mata pelajaran yang diajarkan.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => handleOpenCreateModal('walikelas')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-900/10 cursor-pointer transition-all shrink-0"
+            onClick={() => handleOpenCreateModal('guru')}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-900/10 cursor-pointer transition-all shrink-0"
           >
-            <UserPlus className="w-4 h-4" />
-            + Input Wali Kelas Baru & Password
+            <BookOpen className="w-4 h-4" />
+            + Buat Akun Guru & Mapel
           </button>
           <button
             type="button"
-            onClick={() => handleOpenCreateModal('guru')}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 cursor-pointer transition-all shrink-0"
+            onClick={() => handleOpenCreateModal('walikelas')}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-900/10 cursor-pointer transition-all shrink-0"
           >
-            <Users className="w-4 h-4" />
-            + Akun Guru/Admin
+            <UserPlus className="w-4 h-4" />
+            + Akun Wali Kelas
           </button>
         </div>
       </div>
@@ -246,15 +331,20 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           </div>
           <div className="text-base font-black tracking-wide">
             {settings.namaWaliKelas || 'Belum Ditetapkan'}{' '}
-            {settings.nipWaliKelas ? <span className="text-xs font-normal text-emerald-200">({settings.nipWaliKelas})</span> : null}
+            {settings.nipWaliKelas ? (
+              <span className="text-xs font-normal text-emerald-200">({settings.nipWaliKelas})</span>
+            ) : null}
           </div>
           <div className="text-xs text-emerald-200">
-            Kelas Binaan: <span className="font-bold text-white uppercase bg-emerald-800/80 px-2 py-0.5 rounded-md">{settings.namaKelas}</span>
+            Kelas Binaan:{' '}
+            <span className="font-bold text-white uppercase bg-emerald-800/80 px-2 py-0.5 rounded-md">
+              {settings.namaKelas}
+            </span>
           </div>
         </div>
 
         <div className="text-xs text-emerald-100/80 bg-white/10 p-3 rounded-2xl border border-white/10 max-w-sm">
-          💡 <strong>Tips Admin:</strong> Klik tombol <em>"Jadikan Wali Kelas di Raport"</em> pada daftar di bawah untuk langsung menetapkan nama wali kelas pada lembar cetak raport dan legger.
+          💡 <strong>Tips Admin:</strong> Klik tombol <em>"Jadikan Wali Kelas di Raport"</em> pada daftar di bawah untuk langsung menetapkan nama wali kelas pada lembar cetak raport. Untuk akun <strong>Guru Pengajar</strong>, Anda dapat menentukan mata pelajaran apa saja yang diampunya.
         </div>
       </div>
 
@@ -275,6 +365,18 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => setFilterRole('guru')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              filterRole === 'guru'
+                ? 'bg-blue-700 text-white shadow-xs'
+                : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            Guru Pengajar ({totalGuru})
+          </button>
+          <button
+            type="button"
             onClick={() => setFilterRole('walikelas')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
               filterRole === 'walikelas'
@@ -283,29 +385,19 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             }`}
           >
             <UserCheck className="w-3.5 h-3.5" />
-            Wali Kelas Saja ({totalWaliKelas})
+            Wali Kelas ({totalWaliKelas})
           </button>
           <button
             type="button"
             onClick={() => setFilterRole('admin')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
               filterRole === 'admin'
                 ? 'bg-purple-700 text-white shadow-xs'
                 : 'bg-purple-50 text-purple-800 hover:bg-purple-100'
             }`}
           >
-            Administrator
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterRole('guru')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              filterRole === 'guru'
-                ? 'bg-blue-700 text-white shadow-xs'
-                : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
-            }`}
-          >
-            Guru Pengajar
+            <Shield className="w-3.5 h-3.5" />
+            Administrator ({totalAdmin})
           </button>
         </div>
 
@@ -316,23 +408,23 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari nama / username / kelas..."
+            placeholder="Cari nama / username / mapel..."
             className="w-full pl-9 pr-3.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-600 focus:bg-white"
           />
         </div>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+      {/* Tabel Daftar Pengguna */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 uppercase text-[11px]">
-              <tr>
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
                 <th className="p-4 w-12 text-center">No</th>
                 <th className="p-4">Identitas & Nama Lengkap</th>
-                <th className="p-4">Kredensial Login (Username & Password)</th>
+                <th className="p-4">Kredensial Login</th>
                 <th className="p-4">Peran (Role)</th>
-                <th className="p-4">Kelas Binaan</th>
+                <th className="p-4">Tugas / Mapel yang Diajar</th>
                 <th className="p-4 text-center w-48">Aksi Administrator</th>
               </tr>
             </thead>
@@ -347,7 +439,15 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                 filteredUsers.map((u, i) => {
                   const isCurrentActiveWali =
                     u.role === 'walikelas' &&
-                    (settings.namaWaliKelas.toLowerCase() === (u.namaLengkap || u.fullName).toLowerCase());
+                    settings.namaWaliKelas.toLowerCase() ===
+                      (u.namaLengkap || u.fullName).toLowerCase();
+
+                  // Find assigned mapel objects
+                  const assignedMapels = mapelList.filter(
+                    (m) =>
+                      u.assignedMapelIds?.includes(m.id) ||
+                      u.mapelAkses?.includes(m.nama)
+                  );
 
                   return (
                     <tr
@@ -357,9 +457,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                       }`}
                     >
                       {/* No */}
-                      <td className="p-4 text-center font-bold text-slate-400">
-                        {i + 1}
-                      </td>
+                      <td className="p-4 text-center font-bold text-slate-400">{i + 1}</td>
 
                       {/* Nama & NIP */}
                       <td className="p-4">
@@ -395,13 +493,17 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                       <td className="p-4">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] uppercase font-bold text-slate-400">User:</span>
+                            <span className="text-[10px] uppercase font-bold text-slate-400">
+                              User:
+                            </span>
                             <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
                               {u.username}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] uppercase font-bold text-slate-400">Pass:</span>
+                            <span className="text-[10px] uppercase font-bold text-slate-400">
+                              Pass:
+                            </span>
                             <span className="font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-100">
                               {u.password}
                             </span>
@@ -444,21 +546,46 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                             </>
                           ) : (
                             <>
-                              <Users className="w-3 h-3" />
+                              <BookOpen className="w-3 h-3" />
                               Guru Pengajar
                             </>
                           )}
                         </span>
                       </td>
 
-                      {/* Kelas Binaan */}
+                      {/* Tugas / Mapel yang Diajar */}
                       <td className="p-4">
                         {u.role === 'walikelas' ? (
-                          <div className="font-bold text-slate-800 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 inline-block">
-                            {u.kelasAkses || u.assignedClass || 'Belum diatur'}
+                          <div>
+                            <div className="font-bold text-slate-800 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 inline-block">
+                              Kelas: {u.kelasAkses || u.assignedClass || 'Belum diatur'}
+                            </div>
+                          </div>
+                        ) : u.role === 'guru' ? (
+                          <div className="space-y-1 max-w-xs">
+                            {assignedMapels.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {assignedMapels.map((m) => (
+                                  <span
+                                    key={m.id}
+                                    className="bg-blue-50 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-md border border-blue-200 truncate"
+                                    title={m.nama}
+                                  >
+                                    {m.nama}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 font-medium inline-block">
+                                Belum ada mapel (Klik edit)
+                              </span>
+                            )}
+                            <div className="text-[10px] text-slate-400">
+                              Kelas: {u.kelasAkses || u.assignedClass || 'Semua Kelas'}
+                            </div>
                           </div>
                         ) : (
-                          <span className="text-slate-400 font-medium">Semua Kelas</span>
+                          <span className="text-slate-400 font-medium">Semua Akses Sistem</span>
                         )}
                       </td>
 
@@ -471,7 +598,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                               type="button"
                               onClick={() => {
                                 onSetActiveWaliKelas(u);
-                                setSuccessMsg(`"${u.namaLengkap || u.fullName}" sekarang ditetapkan sebagai Wali Kelas aktif di Raport!`);
+                                setSuccessMsg(
+                                  `"${
+                                    u.namaLengkap || u.fullName
+                                  }" sekarang ditetapkan sebagai Wali Kelas aktif di Raport!`
+                                );
                                 setTimeout(() => setSuccessMsg(''), 3000);
                               }}
                               className={`px-2.5 py-1.5 rounded-xl font-bold text-[10px] cursor-pointer transition-all flex items-center gap-1 ${
@@ -486,12 +617,16 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                             </button>
                           )}
 
-                          {/* Edit User / Reset Password */}
+                          {/* Edit User / Atur Mapel Guru / Reset Password */}
                           <button
                             type="button"
                             onClick={() => handleOpenEditModal(u)}
                             className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border border-slate-200"
-                            title="Edit Akun & Ubah Password"
+                            title={
+                              u.role === 'guru'
+                                ? 'Edit Akun & Atur Mata Pelajaran yang Diajar'
+                                : 'Edit Akun & Reset Kata Sandi'
+                            }
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
@@ -501,7 +636,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                             <button
                               type="button"
                               onClick={() => {
-                                if (window.confirm(`Hapus akun ${u.namaLengkap || u.fullName} (${u.username})?`)) {
+                                if (
+                                  window.confirm(
+                                    `Hapus akun ${u.namaLengkap || u.fullName} (${u.username})?`
+                                  )
+                                ) {
                                   onDeleteUser(u.id);
                                 }
                               }}
@@ -529,47 +668,39 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
       {/* MODAL 1: BUAT AKUN BARU OLEH ADMIN */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95">
-            <div className="p-5 bg-linear-to-r from-emerald-800 to-teal-800 text-white flex justify-between items-center">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="p-5 bg-linear-to-r from-slate-900 to-slate-800 text-white flex justify-between items-center shrink-0">
               <div>
                 <h3 className="font-bold text-sm uppercase tracking-wide flex items-center gap-2">
-                  <UserPlus className="w-4 h-4" />
-                  Buat Akun Wali Kelas / Pengguna Baru
+                  <UserPlus className="w-4 h-4 text-emerald-400" />
+                  Buat Akun Guru Pengajar / Wali Kelas Baru
                 </h3>
-                <p className="text-[11px] text-emerald-200">
+                <p className="text-[11px] text-slate-300">
                   Dikelola langsung oleh Administrator Pondok Pesantren
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="p-1 text-emerald-200 hover:text-white rounded-lg cursor-pointer"
+                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleCreateUser} className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
               {/* Role Selection */}
               <div>
                 <label className="block font-bold text-slate-700 uppercase mb-1.5">
-                  1. Peran Pengguna (Role)
+                  1. Pilih Peran Pengguna (Role)
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setRole('walikelas')}
-                    className={`py-2 px-3 rounded-xl font-bold text-center border cursor-pointer transition-all ${
-                      role === 'walikelas'
-                        ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    Wali Kelas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('guru')}
+                    onClick={() => {
+                      setRole('guru');
+                      setKelasAkses('Semua Kelas');
+                    }}
                     className={`py-2 px-3 rounded-xl font-bold text-center border cursor-pointer transition-all ${
                       role === 'guru'
                         ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
@@ -577,6 +708,20 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                     }`}
                   >
                     Guru Pengajar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRole('walikelas');
+                      setKelasAkses('7 MTS PUTRA');
+                    }}
+                    className={`py-2 px-3 rounded-xl font-bold text-center border cursor-pointer transition-all ${
+                      role === 'walikelas'
+                        ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Wali Kelas
                   </button>
                   <button
                     type="button"
@@ -603,7 +748,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                     required
                     value={namaLengkap}
                     onChange={(e) => setNamaLengkap(e.target.value)}
-                    placeholder="Masukkan nama lengkap & gelar wali kelas"
+                    placeholder={
+                      role === 'guru'
+                        ? 'e.g. Ustadz Abdullah, S.Pd.I.'
+                        : 'e.g. Ustadz Ahmad, M.Pd.'
+                    }
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                   />
                 </div>
@@ -621,6 +770,89 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                   />
                 </div>
               </div>
+
+              {/* KHUSUS GURU: Tentukan Mata Pelajaran yang Diajarkan */}
+              {role === 'guru' && (
+                <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-bold text-blue-950 uppercase text-[11px] flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-blue-700" />
+                      3. Tentukan Mata Pelajaran yang Diajar oleh Guru Ini:
+                    </label>
+                    <span className="text-[10px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full">
+                      {selectedMapelIds.length} Mapel Dipilih
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-blue-800">
+                    Guru ini nantinya hanya dapat menginput nilai untuk mata pelajaran yang dicentang oleh Admin di bawah ini:
+                  </p>
+
+                  {/* List of Subjects by Category */}
+                  <div className="max-h-48 overflow-y-auto space-y-2.5 bg-white p-3 rounded-xl border border-blue-200">
+                    {categories.map((cat) => {
+                      const catMapels = mapelList.filter((m) => m.kategori === cat);
+                      const allCatSelected = catMapels.every((m) =>
+                        selectedMapelIds.includes(m.id)
+                      );
+                      return (
+                        <div key={cat} className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
+                            <span>{cat}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (allCatSelected) {
+                                  setSelectedMapelIds((prev) =>
+                                    prev.filter((id) => !catMapels.some((m) => m.id === id))
+                                  );
+                                } else {
+                                  setSelectedMapelIds((prev) =>
+                                    Array.from(new Set([...prev, ...catMapels.map((m) => m.id)]))
+                                  );
+                                }
+                              }}
+                              className="text-[10px] text-blue-700 hover:text-blue-900 font-bold underline cursor-pointer"
+                            >
+                              {allCatSelected ? 'Batal Semua' : 'Pilih Semua'}
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 pl-1">
+                            {catMapels.map((m) => {
+                              const isChecked = selectedMapelIds.includes(m.id);
+                              return (
+                                <label
+                                  key={m.id}
+                                  className={`flex items-center gap-2 p-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                                    isChecked
+                                      ? 'bg-blue-50 border-blue-400 text-blue-950 font-bold'
+                                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedMapelIds((prev) => [...prev, m.id]);
+                                      } else {
+                                        setSelectedMapelIds((prev) =>
+                                          prev.filter((id) => id !== m.id)
+                                        );
+                                      }
+                                    }}
+                                    className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                                  />
+                                  <span className="truncate">{m.nama}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Kelas Binaan (Jika Wali Kelas) */}
               {role === 'walikelas' && (
@@ -671,7 +903,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="e.g. walikelas7a"
+                    placeholder={role === 'guru' ? 'e.g. gurunahwu' : 'e.g. walikelas7a'}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                   />
                 </div>
@@ -720,7 +952,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
                   Simpan & Buat Akun
@@ -731,18 +963,18 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         </div>
       )}
 
-      {/* MODAL 2: EDIT AKUN & UBAH PASSWORD */}
+      {/* MODAL 2: EDIT AKUN & UBAH MATA PELAJARAN / PASSWORD */}
       {editingUser && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95">
-            <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="p-5 bg-slate-900 text-white flex justify-between items-center shrink-0">
               <div>
                 <h3 className="font-bold text-sm uppercase tracking-wide flex items-center gap-2">
                   <Edit2 className="w-4 h-4 text-emerald-400" />
-                  Edit Akun & Reset Kata Sandi
+                  Edit Akun & Atur Penugasan
                 </h3>
                 <p className="text-[11px] text-slate-300">
-                  Ubah data, tetapkan kelas binaan baru, atau ganti password
+                  Ubah data, mata pelajaran yang diajarkan, atau reset password
                 </p>
               </div>
               <button
@@ -754,7 +986,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditUser} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleSaveEditUser} className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
               <div>
                 <label className="block font-bold text-slate-700 uppercase mb-1">
                   Nama Lengkap Pemilik Akun
@@ -807,13 +1039,103 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                     }
                     className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
                   >
-                    <option value="walikelas">Wali Kelas</option>
                     <option value="guru">Guru Pengajar</option>
+                    <option value="walikelas">Wali Kelas</option>
                     <option value="admin">Administrator</option>
                   </select>
                 </div>
               </div>
 
+              {/* JIKA GURU: Tentukan Mata Pelajaran yang Diajar */}
+              {editingUser.role === 'guru' && (
+                <div className="p-3.5 bg-blue-50/80 rounded-2xl border border-blue-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-bold text-blue-950 uppercase text-[11px] flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-blue-700" />
+                      Mata Pelajaran yang Diajarkan oleh Guru Ini:
+                    </label>
+                    <span className="text-[10px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full">
+                      {(editingUser.assignedMapelIds || []).length} Mapel Terpilih
+                    </span>
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto space-y-2.5 bg-white p-3 rounded-xl border border-blue-200">
+                    {categories.map((cat) => {
+                      const catMapels = mapelList.filter((m) => m.kategori === cat);
+                      const currentIds = editingUser.assignedMapelIds || [];
+                      const allCatSelected = catMapels.every((m) => currentIds.includes(m.id));
+
+                      return (
+                        <div key={cat} className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
+                            <span>{cat}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (allCatSelected) {
+                                  setEditingUser({
+                                    ...editingUser,
+                                    assignedMapelIds: currentIds.filter(
+                                      (id) => !catMapels.some((m) => m.id === id)
+                                    ),
+                                  });
+                                } else {
+                                  setEditingUser({
+                                    ...editingUser,
+                                    assignedMapelIds: Array.from(
+                                      new Set([...currentIds, ...catMapels.map((m) => m.id)])
+                                    ),
+                                  });
+                                }
+                              }}
+                              className="text-[10px] text-blue-700 hover:text-blue-900 font-bold underline cursor-pointer"
+                            >
+                              {allCatSelected ? 'Batal Semua' : 'Pilih Semua'}
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 pl-1">
+                            {catMapels.map((m) => {
+                              const isChecked = currentIds.includes(m.id);
+                              return (
+                                <label
+                                  key={m.id}
+                                  className={`flex items-center gap-2 p-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                                    isChecked
+                                      ? 'bg-blue-50 border-blue-400 text-blue-950 font-bold'
+                                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setEditingUser({
+                                          ...editingUser,
+                                          assignedMapelIds: [...currentIds, m.id],
+                                        });
+                                      } else {
+                                        setEditingUser({
+                                          ...editingUser,
+                                          assignedMapelIds: currentIds.filter((id) => id !== m.id),
+                                        });
+                                      }
+                                    }}
+                                    className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                                  />
+                                  <span className="truncate">{m.nama}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* JIKA WALI KELAS */}
               {editingUser.role === 'walikelas' && (
                 <div>
                   <label className="block font-bold text-slate-700 uppercase mb-1">

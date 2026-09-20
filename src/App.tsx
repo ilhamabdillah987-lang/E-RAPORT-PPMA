@@ -95,6 +95,9 @@ export default function App() {
         if (parsed.namaKepalaKepesantrenan === 'KH. Syamsuddin Mahmud, Lc.') {
           parsed.namaKepalaKepesantrenan = '';
         }
+        if (parsed.logoUrl === '/logo-alhikmah.svg' || parsed.logoUrl?.includes('viewBox="0 0 120 120"')) {
+          parsed.logoUrl = '';
+        }
         return parsed;
       } catch (e) {}
     }
@@ -171,6 +174,10 @@ export default function App() {
         }
         if (parsed.namaKepalaKepesantrenan === 'KH. Syamsuddin Mahmud, Lc.') {
           parsed.namaKepalaKepesantrenan = '';
+          modified = true;
+        }
+        if (parsed.logoUrl === '/logo-alhikmah.svg' || parsed.logoUrl?.includes('viewBox="0 0 120 120"')) {
+          parsed.logoUrl = '';
           modified = true;
         }
         if (modified) {
@@ -335,18 +342,36 @@ export default function App() {
   };
 
   const handleAddUser = (user: AppUser) => {
-    setUsers((prev) => [...prev, user]);
+    setUsers((prev) => {
+      const next = [...prev, user];
+      try {
+        localStorage.setItem('alhikmah_users', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
   };
 
   const handleUpdateUser = (updatedUser: AppUser) => {
-    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+    setUsers((prev) => {
+      const next = prev.map((u) => (u.id === updatedUser.id ? updatedUser : u));
+      try {
+        localStorage.setItem('alhikmah_users', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
     }
   };
 
   const handleDeleteUser = (id: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== id));
+    setUsers((prev) => {
+      const next = prev.filter((u) => u.id !== id);
+      try {
+        localStorage.setItem('alhikmah_users', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
   };
 
   const handleSetActiveWaliKelas = (waliKelas: AppUser) => {
@@ -372,29 +397,46 @@ export default function App() {
     if (data.users) setUsers(data.users);
   };
 
+  const handleBatchSaveNilai = (updatedMap: Record<string, NilaiSantri>) => {
+    setNilaiMap(updatedMap);
+    try {
+      localStorage.setItem('alhikmah_nilai_map', JSON.stringify(updatedMap));
+    } catch (e) {}
+  };
+
   // If not logged in, show Login Screen
   if (!currentUser) {
     return <LoginView users={users} settings={settings} onLogin={handleLogin} />;
   }
 
   // Navigation Items:
-  // When logged in as admin, strictly show ONLY:
-  // 1. Input Wali Kelas Baru & Akun (Membuat Username & Password)
-  // 2. Download Data Raport
+  // Role-based navigation:
+  // 1. Admin: 'user-management' (Manajemen Akun Guru & Wali Kelas) & 'download-raport'
+  // 2. Guru: ONLY 'input-nilai' (Input Nilai Mata Pelajaran yang Diajarkan)
+  // 3. Wali Kelas: full suite of Raport tools
   const navItems =
     currentUser.role === 'admin'
       ? [
           {
             id: 'user-management' as const,
-            label: 'Input Wali Kelas Baru & Akun',
+            label: 'Manajemen Akun Guru & Wali Kelas',
             icon: UserPlus,
-            desc: 'Membuat Username & Password Wali Kelas',
+            desc: 'Buat Akun Guru & Tentukan Mapel yang Diajarkan',
           },
           {
             id: 'download-raport' as const,
             label: 'Download Data Raport',
             icon: Download,
             desc: 'Unduh Rekap Nilai, Legger & Raport',
+          },
+        ]
+      : currentUser.role === 'guru'
+      ? [
+          {
+            id: 'input-nilai' as const,
+            label: 'Input Nilai Mata Pelajaran',
+            icon: PenTool,
+            desc: 'Input Nilai Sesuai Mapel yang Diajarkan',
           },
         ]
       : [
@@ -448,12 +490,14 @@ export default function App() {
           },
         ];
 
-  // Enforce admin to only view authorized menus
+  // Enforce role-based menu access
   const effectiveMenu =
     currentUser.role === 'admin'
       ? currentMenu === 'download-raport'
         ? 'download-raport'
         : 'user-management'
+      : currentUser.role === 'guru'
+      ? 'input-nilai'
       : currentMenu;
 
   return (
@@ -471,17 +515,15 @@ export default function App() {
               {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
-            <div className="w-10 h-10 bg-white rounded-xl p-1 flex items-center justify-center shadow-xs">
-              {settings.logoUrl ? (
+            {settings.logoUrl ? (
+              <div className="w-10 h-10 bg-white rounded-xl p-0.5 flex items-center justify-center shadow-xs">
                 <img
                   src={settings.logoUrl}
-                  alt="Logo"
+                  alt="Logo Pesantren"
                   className="w-full h-full object-contain"
                 />
-              ) : (
-                <GraduationCap className="w-6 h-6 text-emerald-800" />
-              )}
-            </div>
+              </div>
+            ) : null}
 
             <div>
               <h1 className="text-xs uppercase font-extrabold tracking-widest text-emerald-300">
@@ -587,7 +629,9 @@ export default function App() {
             mapelList={mapelList}
             nilaiMap={nilaiMap}
             settings={settings}
+            currentUser={currentUser}
             onSaveNilai={handleSaveNilai}
+            onBatchSaveNilai={handleBatchSaveNilai}
           />
         )}
 
@@ -659,6 +703,7 @@ export default function App() {
             users={users}
             currentUser={currentUser}
             settings={settings}
+            mapelList={mapelList}
             onAddUser={handleAddUser}
             onUpdateUser={handleUpdateUser}
             onDeleteUser={handleDeleteUser}

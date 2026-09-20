@@ -34,7 +34,7 @@ export const UploadLogoView: React.FC<UploadLogoViewProps> = ({
 
   const handleResetToDefault = () => {
     // Default pesantren emblem
-    const defaultEmblem = 'https://api.dicebear.com/7.x/shapes/svg?seed=AlHikmahPesantren&backgroundColor=059669';
+    const defaultEmblem = '/logo-alhikmah.svg';
     setPreviewUrl(defaultEmblem);
     onUpdateLogo(defaultEmblem);
     setIsSaved(true);

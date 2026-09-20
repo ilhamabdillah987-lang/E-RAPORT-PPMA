@@ -11,19 +11,12 @@ export const RaportCover: React.FC<RaportCoverProps> = ({ santri, settings }) =>
     <div className="print-page bg-white w-full max-w-[210mm] mx-auto min-h-[290mm] p-12 sm:p-16 flex flex-col justify-between items-center text-center shadow-md print:shadow-none border border-slate-200 print:border-none relative">
       {/* Top Logo Container */}
       <div className="pt-10 flex flex-col items-center">
-        <div className="w-36 h-36 border-2 border-dashed border-sky-300 rounded-3xl p-3 flex flex-col items-center justify-center mb-10 bg-slate-50/50">
-          {settings.logoUrl ? (
-            <img
-              src={settings.logoUrl}
-              alt="Logo Pesantren"
-              className="max-h-24 max-w-24 object-contain"
-            />
-          ) : (
-            <div className="text-center">
-              <span className="text-xs font-semibold text-slate-400 tracking-wider block">LOGO</span>
-              <span className="text-[10px] text-slate-400 tracking-widest block mt-0.5">PESANTREN</span>
-            </div>
-          )}
+        <div className="w-36 h-36 flex flex-col items-center justify-center mb-8">
+          <img
+            src={settings.logoUrl || '/logo-alhikmah.svg'}
+            alt="Logo Pesantren Al-Hikmah"
+            className="w-32 h-32 object-contain filter drop-shadow-sm"
+          />
         </div>
 
         {/* Title */}

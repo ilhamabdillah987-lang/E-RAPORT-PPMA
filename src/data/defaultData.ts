@@ -1,6 +1,6 @@
 import { AppUser, MataPelajaran, RaportSettings, Santri, NilaiSantri } from '../types';
 
-export const DEFAULT_LOGO_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120"><rect width="120" height="120" rx="16" fill="%23f0fdf4"/><circle cx="60" cy="60" r="48" fill="%23047857" stroke="%23065f46" stroke-width="2"/><path d="M40 78 C40 50 60 36 60 36 C60 36 80 50 80 78 C72 74 68 76 60 72 C52 76 48 74 40 78 Z" fill="%23ffffff"/><path d="M60 26 L60 35 M55 31 L65 31" stroke="%23facc15" stroke-width="2.5" stroke-linecap="round"/><circle cx="60" cy="50" r="4" fill="%23facc15"/><text x="60" y="96" font-family="Arial, sans-serif" font-size="8.5" font-weight="bold" fill="%23ffffff" text-anchor="middle" letter-spacing="1">AL-HIKMAH</text><text x="60" y="106" font-family="Arial, sans-serif" font-size="6.5" fill="%23bbf7d0" text-anchor="middle">SEPATAN - TANGERANG</text></svg>`;
+export const DEFAULT_LOGO_SVG = '';
 
 export const DEFAULT_SETTINGS: RaportSettings = {
   namaYayasan: 'YAYASAN PENDIDIKAN ISLAM AL-HIKMAH',
@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS: RaportSettings = {
   nipWaliKelas: '',
   namaKepalaKepesantrenan: '',
   tanggalKenaikanKelulusan: '25 Juni 2026',
-  logoUrl: DEFAULT_LOGO_SVG,
+  logoUrl: '',
   googleSheetWebAppUrl: '',
 };
 
@@ -38,6 +38,19 @@ export const DEFAULT_USERS: AppUser[] = [
     role: 'walikelas',
     assignedClass: '7 MTS PUTRA',
     kelasAkses: '7 MTS PUTRA',
+    createdAt: '2025-07-01',
+  },
+  {
+    id: 'user-guru',
+    username: 'guru',
+    password: 'guru123',
+    fullName: 'Ustadz Pengajar',
+    namaLengkap: 'Ustadz Pengajar',
+    role: 'guru',
+    assignedClass: 'Semua Kelas',
+    kelasAkses: 'Semua Kelas',
+    assignedMapelIds: ['ar-1', 'ar-3'],
+    mapelAkses: ['Asasul Mubtadiin Fi Ilmi Nahwi', 'Asasul Mubtadiin Fi Ilmi Shorfi'],
     createdAt: '2025-07-01',
   },
 ];

@@ -9,6 +9,8 @@ export interface AppUser {
   role: UserRole;
   assignedClass?: string;
   kelasAkses?: string;
+  assignedMapelIds?: string[];
+  mapelAkses?: string[];
   nip?: string;
   createdAt: string;
 }

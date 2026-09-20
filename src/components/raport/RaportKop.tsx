@@ -8,18 +8,12 @@ interface RaportKopProps {
 export const RaportKop: React.FC<RaportKopProps> = ({ settings }) => {
   return (
     <div className="flex items-center gap-4 border-b-2 border-black pb-2 mb-3">
-      <div className="w-20 h-20 shrink-0 flex items-center justify-center p-1 rounded-xl bg-emerald-50/50 border border-slate-200">
-        {settings.logoUrl ? (
-          <img
-            src={settings.logoUrl}
-            alt="Logo Pesantren"
-            className="w-full h-full object-contain"
-          />
-        ) : (
-          <div className="w-16 h-16 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-[10px] flex items-center justify-center text-center p-1">
-            LOGO
-          </div>
-        )}
+      <div className="w-20 h-20 shrink-0 flex items-center justify-center p-0.5">
+        <img
+          src={settings.logoUrl || '/logo-alhikmah.svg'}
+          alt="Logo Pesantren Al-Hikmah"
+          className="w-full h-full object-contain"
+        />
       </div>
 
       <div className="flex-1 text-center pr-4">
