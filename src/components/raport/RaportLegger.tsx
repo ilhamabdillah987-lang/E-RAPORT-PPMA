@@ -186,9 +186,17 @@ export const RaportLegger: React.FC<RaportLeggerProps> = ({
           <p className="font-bold">Mengetahui,</p>
           <p className="font-bold">Kepala Kepesantrenan</p>
           <div className="h-24 sm:h-28 flex flex-col justify-end items-center">
-            <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
-              {settings.namaKepalaKepesantrenan || 'KH. Syamsuddin Mahmud, Lc.'}
-            </p>
+            {settings.namaKepalaKepesantrenan ? (
+              <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
+                {settings.namaKepalaKepesantrenan}
+              </p>
+            ) : (
+              <div className="flex items-center text-xs sm:text-sm font-bold text-black">
+                <span>(</span>
+                <span className="w-48 border-b-2 border-black mx-1 inline-block"></span>
+                <span>)</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -198,9 +206,17 @@ export const RaportLegger: React.FC<RaportLeggerProps> = ({
           </p>
           <p className="font-bold">Wali Kelas,</p>
           <div className="h-24 sm:h-28 flex flex-col justify-end items-center">
-            <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
-              {settings.namaWaliKelas || 'Wali Kelas 7 MTS PUTRA'}
-            </p>
+            {settings.namaWaliKelas ? (
+              <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
+                {settings.namaWaliKelas}
+              </p>
+            ) : (
+              <div className="flex items-center text-xs sm:text-sm font-bold text-black">
+                <span>(</span>
+                <span className="w-48 border-b-2 border-black mx-1 inline-block"></span>
+                <span>)</span>
+              </div>
+            )}
             {settings.nipWaliKelas ? (
               <p className="text-[11px] font-semibold text-slate-700 mt-1">
                 NIP. {settings.nipWaliKelas}

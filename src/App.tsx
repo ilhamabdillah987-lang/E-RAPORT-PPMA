@@ -52,23 +52,68 @@ import {
 export default function App() {
   // Persistence state
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
-    const saved = localStorage.getItem('alhikmah_current_user');
-    return saved ? JSON.parse(saved) : DEFAULT_USERS[0];
+    // When visiting the app (e.g. clicking the deployed link), always show the login view first
+    localStorage.removeItem('alhikmah_current_user');
+    const session = sessionStorage.getItem('alhikmah_session_user');
+    return session ? JSON.parse(session) : null;
   });
 
   const [users, setUsers] = useState<AppUser[]>(() => {
     const saved = localStorage.getItem('alhikmah_users');
-    return saved ? JSON.parse(saved) : DEFAULT_USERS;
+    if (saved) {
+      try {
+        const parsed: AppUser[] = JSON.parse(saved);
+        return parsed.map((u) => {
+          if (
+            u.fullName === 'Ustadz H. Ahmad Fauzi, S.Pd.I.' ||
+            u.namaLengkap === 'Ustadz H. Ahmad Fauzi, S.Pd.I.'
+          ) {
+            return {
+              ...u,
+              fullName: 'Wali Kelas',
+              namaLengkap: '',
+            };
+          }
+          return u;
+        });
+      } catch (e) {}
+    }
+    return DEFAULT_USERS;
   });
 
   const [settings, setSettings] = useState<RaportSettings>(() => {
     const saved = localStorage.getItem('alhikmah_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_RAPORT_SETTINGS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.namaWaliKelas === 'Ustadz H. Ahmad Fauzi, S.Pd.I.') {
+          parsed.namaWaliKelas = '';
+        }
+        if (parsed.nipWaliKelas === '19840512 201001 1 008') {
+          parsed.nipWaliKelas = '';
+        }
+        if (parsed.namaKepalaKepesantrenan === 'KH. Syamsuddin Mahmud, Lc.') {
+          parsed.namaKepalaKepesantrenan = '';
+        }
+        return parsed;
+      } catch (e) {}
+    }
+    return DEFAULT_RAPORT_SETTINGS;
   });
 
   const [santriList, setSantriList] = useState<Santri[]>(() => {
     const saved = localStorage.getItem('alhikmah_santri');
-    return saved ? JSON.parse(saved) : DEFAULT_SANTRI_LIST;
+    if (saved) {
+      try {
+        const parsed: Santri[] = JSON.parse(saved);
+        const sampleIds = ['santri-1', 'santri-2', 'santri-3', 'santri-4'];
+        const sampleNames = ['wGW', 'Muhammad Zaidan Al-Fatih', 'Ahmad Faris Hidayat', 'Bilal Ramadhan'];
+        return parsed.filter(
+          (s) => !sampleIds.includes(s.id) && !sampleNames.includes(s.namaLengkap)
+        );
+      } catch (e) {}
+    }
+    return DEFAULT_SANTRI_LIST;
   });
 
   const [mapelList, setMapelList] = useState<MataPelajaran[]>(() => {
@@ -78,7 +123,17 @@ export default function App() {
 
   const [nilaiMap, setNilaiMap] = useState<Record<string, NilaiSantri>>(() => {
     const saved = localStorage.getItem('alhikmah_nilai_map');
-    return saved ? JSON.parse(saved) : DEFAULT_NILAI_MAP;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        delete parsed['santri-1'];
+        delete parsed['santri-2'];
+        delete parsed['santri-3'];
+        delete parsed['santri-4'];
+        return parsed;
+      } catch (e) {}
+    }
+    return DEFAULT_NILAI_MAP;
   });
 
   // Current active menu
@@ -93,22 +148,103 @@ export default function App() {
     | 'google-sheets'
     | 'user-management'
     | 'download-raport'
-  >(() => {
-    const saved = localStorage.getItem('alhikmah_current_user');
-    if (saved) {
-      try {
-        const u = JSON.parse(saved);
-        if (u?.role === 'admin') return 'user-management';
-      } catch (e) {}
-    }
-    return 'input-nilai';
-  });
+  >('input-nilai');
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Sync to LocalStorage
+  // Initial cleanup of old sample data from localStorage
   useEffect(() => {
-    localStorage.setItem('alhikmah_current_user', JSON.stringify(currentUser));
+    try {
+      localStorage.removeItem('alhikmah_current_user');
+
+      const savedSettings = localStorage.getItem('alhikmah_settings');
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        let modified = false;
+        if (parsed.namaWaliKelas === 'Ustadz H. Ahmad Fauzi, S.Pd.I.') {
+          parsed.namaWaliKelas = '';
+          modified = true;
+        }
+        if (parsed.nipWaliKelas === '19840512 201001 1 008') {
+          parsed.nipWaliKelas = '';
+          modified = true;
+        }
+        if (parsed.namaKepalaKepesantrenan === 'KH. Syamsuddin Mahmud, Lc.') {
+          parsed.namaKepalaKepesantrenan = '';
+          modified = true;
+        }
+        if (modified) {
+          localStorage.setItem('alhikmah_settings', JSON.stringify(parsed));
+          setSettings(parsed);
+        }
+      }
+
+      const savedSantri = localStorage.getItem('alhikmah_santri');
+      if (savedSantri) {
+        const parsed: Santri[] = JSON.parse(savedSantri);
+        const sampleIds = ['santri-1', 'santri-2', 'santri-3', 'santri-4'];
+        const sampleNames = ['wGW', 'Muhammad Zaidan Al-Fatih', 'Ahmad Faris Hidayat', 'Bilal Ramadhan'];
+        const hasSample = parsed.some(
+          (s) => sampleIds.includes(s.id) || sampleNames.includes(s.namaLengkap)
+        );
+        if (hasSample) {
+          const cleaned = parsed.filter(
+            (s) => !sampleIds.includes(s.id) && !sampleNames.includes(s.namaLengkap)
+          );
+          localStorage.setItem('alhikmah_santri', JSON.stringify(cleaned));
+          setSantriList(cleaned);
+        }
+      }
+
+      const savedUsers = localStorage.getItem('alhikmah_users');
+      if (savedUsers) {
+        const parsed: AppUser[] = JSON.parse(savedUsers);
+        let modified = false;
+        const cleanedUsers = parsed.map((u) => {
+          if (
+            u.fullName === 'Ustadz H. Ahmad Fauzi, S.Pd.I.' ||
+            u.namaLengkap === 'Ustadz H. Ahmad Fauzi, S.Pd.I.'
+          ) {
+            modified = true;
+            return {
+              ...u,
+              fullName: 'Wali Kelas',
+              namaLengkap: '',
+            };
+          }
+          return u;
+        });
+        if (modified) {
+          localStorage.setItem('alhikmah_users', JSON.stringify(cleanedUsers));
+          setUsers(cleanedUsers);
+        }
+      }
+
+      const savedNilai = localStorage.getItem('alhikmah_nilai_map');
+      if (savedNilai) {
+        const parsed = JSON.parse(savedNilai);
+        if (parsed['santri-1'] || parsed['santri-2'] || parsed['santri-3'] || parsed['santri-4']) {
+          delete parsed['santri-1'];
+          delete parsed['santri-2'];
+          delete parsed['santri-3'];
+          delete parsed['santri-4'];
+          localStorage.setItem('alhikmah_nilai_map', JSON.stringify(parsed));
+          setNilaiMap(parsed);
+        }
+      }
+    } catch (e) {
+      console.error('Storage cleanup error:', e);
+    }
+  }, []);
+
+  // Sync to SessionStorage and LocalStorage
+  useEffect(() => {
+    if (currentUser) {
+      sessionStorage.setItem('alhikmah_session_user', JSON.stringify(currentUser));
+    } else {
+      sessionStorage.removeItem('alhikmah_session_user');
+      localStorage.removeItem('alhikmah_current_user');
+    }
   }, [currentUser]);
 
   useEffect(() => {
@@ -151,6 +287,7 @@ export default function App() {
 
   const handleLogout = () => {
     setCurrentUser(null);
+    sessionStorage.removeItem('alhikmah_session_user');
     localStorage.removeItem('alhikmah_current_user');
   };
 

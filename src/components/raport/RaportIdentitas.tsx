@@ -219,9 +219,17 @@ export const RaportIdentitas: React.FC<RaportIdentitasProps> = ({ santri, settin
             KEPALA KEPESANTRENAN,
           </p>
           <div className="h-20 flex flex-col justify-end items-center">
-            <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
-              {settings.namaKepalaKepesantrenan || 'KH. Syamsuddin Mahmud, Lc.'}
-            </p>
+            {settings.namaKepalaKepesantrenan ? (
+              <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
+                {settings.namaKepalaKepesantrenan}
+              </p>
+            ) : (
+              <div className="flex items-center text-xs sm:text-sm font-bold text-black">
+                <span>(</span>
+                <span className="w-48 border-b-2 border-black mx-1 inline-block"></span>
+                <span>)</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

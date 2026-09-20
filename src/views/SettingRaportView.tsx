@@ -153,7 +153,7 @@ export const SettingRaportView: React.FC<SettingRaportViewProps> = ({
                     required
                     value={formData.namaWaliKelas}
                     onChange={(e) => setFormData({ ...formData, namaWaliKelas: e.target.value })}
-                    placeholder="e.g. Ustadz Ahmad Fauzi, S.Pd.I."
+                    placeholder="Masukkan nama lengkap & gelar wali kelas"
                     className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                   />
                 </div>
@@ -167,7 +167,7 @@ export const SettingRaportView: React.FC<SettingRaportViewProps> = ({
                   type="text"
                   value={formData.nipWaliKelas}
                   onChange={(e) => setFormData({ ...formData, nipWaliKelas: e.target.value })}
-                  placeholder="e.g. 19850612 201001 1 002 / -"
+                  placeholder="Nomor Induk Pegawai / NIY (opsional)"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                 />
               </div>
@@ -187,7 +187,7 @@ export const SettingRaportView: React.FC<SettingRaportViewProps> = ({
                   onChange={(e) =>
                     setFormData({ ...formData, namaKepalaKepesantrenan: e.target.value })
                   }
-                  placeholder="e.g. KH. Syamsuddin Mahmud, Lc."
+                  placeholder="Masukkan nama kepala kepesantrenan"
                   className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                 />
               </div>
