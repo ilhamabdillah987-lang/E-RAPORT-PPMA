@@ -54,10 +54,10 @@ export const UploadLogoView: React.FC<UploadLogoViewProps> = ({
       <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-black text-slate-900 uppercase">
-            Menu Upload Logo Pesantren
+            Menu Admin: Upload Logo Pesantren
           </h2>
           <p className="text-xs text-slate-500 font-medium">
-            Logo akan otomatis tampil pada Halaman Cover, Kop Surat Raport, dan Lembar Nilai
+            Logo yang diunggah di sini akan otomatis tampil pada Halaman Login, Sampul Cover, dan Kop Surat Raport Santri
           </p>
         </div>
 

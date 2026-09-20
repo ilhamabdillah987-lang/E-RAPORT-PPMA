@@ -424,6 +424,12 @@ export default function App() {
             desc: 'Buat Akun Guru & Tentukan Mapel yang Diajarkan',
           },
           {
+            id: 'upload-logo' as const,
+            label: 'Upload Logo Pesantren',
+            icon: ImageIcon,
+            desc: 'Upload Logo untuk Login, Kop & Cover Raport',
+          },
+          {
             id: 'download-raport' as const,
             label: 'Download Data Raport',
             icon: Download,
@@ -465,12 +471,6 @@ export default function App() {
             desc: 'Cover, Identitas, Nilai, Legger',
           },
           {
-            id: 'upload-logo' as const,
-            label: 'Upload Logo',
-            icon: ImageIcon,
-            desc: 'Logo Kop & Cover Raport',
-          },
-          {
             id: 'lulus-naik' as const,
             label: 'Luluskan / Naikan Santri',
             icon: UserCheck,
@@ -493,10 +493,12 @@ export default function App() {
   // Enforce role-based menu access
   const effectiveMenu =
     currentUser.role === 'admin'
-      ? currentMenu === 'download-raport'
-        ? 'download-raport'
+      ? currentMenu === 'download-raport' || currentMenu === 'upload-logo'
+        ? currentMenu
         : 'user-management'
       : currentUser.role === 'guru'
+      ? 'input-nilai'
+      : currentMenu === 'upload-logo' || currentMenu === 'user-management' || currentMenu === 'download-raport'
       ? 'input-nilai'
       : currentMenu;
 
