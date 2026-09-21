@@ -252,7 +252,7 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
                   {editingSantri ? 'Edit Data Identitas Santri' : 'Tambah Santri Baru'}
                 </h3>
                 <p className="text-[11px] text-emerald-200">
-                  Formulir lengkap 17 poin sesuai format raport Pesantren Al-Hikmah
+                  Formulir lengkap 17 poin sesuai format raport Pondok Pesantren Modern Al-Hikmah
                 </p>
               </div>
               <button

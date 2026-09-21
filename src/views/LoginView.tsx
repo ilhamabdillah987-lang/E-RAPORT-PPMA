@@ -142,9 +142,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, settings, onLogin }
           <h1 className="text-[11px] sm:text-xs uppercase font-bold tracking-widest text-emerald-200">
             {settings.namaYayasan}
           </h1>
-          <h2 className="text-lg sm:text-xl font-black tracking-wide uppercase mt-0.5">
-            {settings.namaPesantren}
-          </h2>
+          {settings.namaPesantren?.toUpperCase().includes('AL-HIKMAH') ? (
+            <h2 className="uppercase font-black tracking-wide mt-1 leading-tight">
+              <span className="block text-xs sm:text-sm font-extrabold text-emerald-100/90 tracking-wider">
+                {settings.namaPesantren.toUpperCase().replace('AL-HIKMAH', '').trim() || 'PONDOK PESANTREN MODERN'}
+              </span>
+              <span className="block text-xl sm:text-2xl font-black text-white tracking-widest mt-0.5">
+                AL-HIKMAH
+              </span>
+            </h2>
+          ) : (
+            <h2 className="text-lg sm:text-xl font-black tracking-wide uppercase mt-0.5">
+              {settings.namaPesantren}
+            </h2>
+          )}
           <p className="text-xs text-emerald-100/80 mt-1">
             Sistem Informasi Pengelolaan & Raport Digital Santri
           </p>

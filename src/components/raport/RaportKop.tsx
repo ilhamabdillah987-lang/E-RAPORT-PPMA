@@ -20,9 +20,20 @@ export const RaportKop: React.FC<RaportKopProps> = ({ settings }) => {
         <h3 className="font-bold text-sm tracking-wider uppercase text-black font-sans leading-tight">
           {settings.namaYayasan}
         </h3>
-        <h2 className="font-extrabold text-lg tracking-wide uppercase text-black font-sans mt-0.5 leading-tight">
-          {settings.namaPesantren}
-        </h2>
+        {settings.namaPesantren?.toUpperCase().includes('AL-HIKMAH') ? (
+          <h2 className="font-extrabold uppercase text-black font-sans mt-0.5 leading-tight">
+            <span className="block text-sm tracking-wide">
+              {settings.namaPesantren.toUpperCase().replace('AL-HIKMAH', '').trim() || 'PONDOK PESANTREN MODERN'}
+            </span>
+            <span className="block text-xl font-black tracking-wider mt-0.5">
+              AL-HIKMAH
+            </span>
+          </h2>
+        ) : (
+          <h2 className="font-extrabold text-lg tracking-wide uppercase text-black font-sans mt-0.5 leading-tight">
+            {settings.namaPesantren}
+          </h2>
+        )}
         <p className="text-[11px] leading-tight text-black mt-1 font-normal max-w-xl mx-auto">
           {settings.alamatPesantren}
         </p>

@@ -4,7 +4,7 @@ export const DEFAULT_LOGO_SVG = '';
 
 export const DEFAULT_SETTINGS: RaportSettings = {
   namaYayasan: 'YAYASAN PENDIDIKAN ISLAM AL-HIKMAH',
-  namaPesantren: 'PESANTREN MODERN AL-HIKMAH',
+  namaPesantren: 'PONDOK PESANTREN MODERN AL-HIKMAH',
   alamatPesantren: 'Jl. Al-Hikmah Kp. Pondok Jaya RT.05/01 Desa Pondok Jaya Kecamatan Sepatan Kabupaten Tangerang Provinsi Banten',
   namaKelas: '7 MTS PUTRA',
   semester: 'GANJIL',

@@ -233,7 +233,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         : '';
 
     const text =
-      `*AKUN RAPORT PONDOK PESANTREN AL-HIKMAH*\n` +
+      `*AKUN RAPORT PONDOK PESANTREN MODERN AL-HIKMAH*\n` +
       `Nama: ${user.namaLengkap || user.fullName}\n` +
       `Peran: ${
         user.role === 'walikelas'

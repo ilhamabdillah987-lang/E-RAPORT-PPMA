@@ -95,6 +95,9 @@ export default function App() {
         if (parsed.namaKepalaKepesantrenan === 'KH. Syamsuddin Mahmud, Lc.') {
           parsed.namaKepalaKepesantrenan = '';
         }
+        if (parsed.namaPesantren === 'PESANTREN MODERN AL-HIKMAH' || !parsed.namaPesantren) {
+          parsed.namaPesantren = 'PONDOK PESANTREN MODERN AL-HIKMAH';
+        }
         if (parsed.logoUrl === '/logo-alhikmah.svg' || parsed.logoUrl?.includes('viewBox="0 0 120 120"')) {
           parsed.logoUrl = '';
         }
@@ -174,6 +177,10 @@ export default function App() {
         }
         if (parsed.namaKepalaKepesantrenan === 'KH. Syamsuddin Mahmud, Lc.') {
           parsed.namaKepalaKepesantrenan = '';
+          modified = true;
+        }
+        if (parsed.namaPesantren === 'PESANTREN MODERN AL-HIKMAH' || !parsed.namaPesantren) {
+          parsed.namaPesantren = 'PONDOK PESANTREN MODERN AL-HIKMAH';
           modified = true;
         }
         if (parsed.logoUrl === '/logo-alhikmah.svg' || parsed.logoUrl?.includes('viewBox="0 0 120 120"')) {

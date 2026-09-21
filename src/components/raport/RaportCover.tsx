@@ -23,9 +23,20 @@ export const RaportCover: React.FC<RaportCoverProps> = ({ santri, settings }) =>
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-wider text-slate-900 font-cinzel uppercase mt-2">
           LAPORAN HASIL BELAJAR
         </h1>
-        <p className="text-xs sm:text-sm font-semibold tracking-widest text-slate-700 uppercase mt-2">
-          {settings.namaPesantren || 'PONDOK PESANTREN MODERN AL-HIKMAH'}
-        </p>
+        {settings.namaPesantren?.toUpperCase().includes('AL-HIKMAH') ? (
+          <div className="uppercase mt-3 leading-snug">
+            <p className="text-xs sm:text-sm font-bold tracking-widest text-slate-700">
+              {settings.namaPesantren.toUpperCase().replace('AL-HIKMAH', '').trim() || 'PONDOK PESANTREN MODERN'}
+            </p>
+            <p className="text-base sm:text-lg font-black tracking-widest text-slate-900 mt-0.5">
+              AL-HIKMAH
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs sm:text-sm font-semibold tracking-widest text-slate-700 uppercase mt-2">
+            {settings.namaPesantren || 'PONDOK PESANTREN MODERN AL-HIKMAH'}
+          </p>
+        )}
       </div>
 
       {/* Santri Card Box */}
