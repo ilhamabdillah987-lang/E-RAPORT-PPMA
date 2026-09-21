@@ -52,93 +52,126 @@ import {
 export default function App() {
   // Persistence state
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
-    // When visiting the app (e.g. clicking the deployed link), always show the login view first
-    localStorage.removeItem('alhikmah_current_user');
-    const session = sessionStorage.getItem('alhikmah_session_user');
-    return session ? JSON.parse(session) : null;
+    try {
+      localStorage.removeItem('alhikmah_current_user');
+      const session = sessionStorage.getItem('alhikmah_session_user');
+      if (session && session !== 'undefined' && session !== 'null') {
+        const parsed = JSON.parse(session);
+        if (parsed && typeof parsed === 'object' && parsed.id && parsed.role) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Session load error:', e);
+    }
+    return null;
   });
 
   const [users, setUsers] = useState<AppUser[]>(() => {
-    const saved = localStorage.getItem('alhikmah_users');
-    if (saved) {
-      try {
-        const parsed: AppUser[] = JSON.parse(saved);
-        return parsed.map((u) => {
-          if (
-            u.fullName === 'Ustadz H. Ahmad Fauzi, S.Pd.I.' ||
-            u.namaLengkap === 'Ustadz H. Ahmad Fauzi, S.Pd.I.'
-          ) {
-            return {
-              ...u,
-              fullName: 'Wali Kelas',
-              namaLengkap: '',
-            };
-          }
-          return u;
-        });
-      } catch (e) {}
+    try {
+      const saved = localStorage.getItem('alhikmah_users');
+      if (saved && saved !== 'undefined' && saved !== 'null') {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((u) => {
+            if (!u) return u;
+            if (
+              u.fullName === 'Ustadz H. Ahmad Fauzi, S.Pd.I.' ||
+              u.namaLengkap === 'Ustadz H. Ahmad Fauzi, S.Pd.I.'
+            ) {
+              return {
+                ...u,
+                fullName: 'Wali Kelas',
+                namaLengkap: '',
+              };
+            }
+            return u;
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Users load error:', e);
     }
     return DEFAULT_USERS;
   });
 
   const [settings, setSettings] = useState<RaportSettings>(() => {
-    const saved = localStorage.getItem('alhikmah_settings');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('alhikmah_settings');
+      if (saved && saved !== 'undefined' && saved !== 'null') {
         const parsed = JSON.parse(saved);
-        if (parsed.namaWaliKelas === 'Ustadz H. Ahmad Fauzi, S.Pd.I.') {
-          parsed.namaWaliKelas = '';
+        if (parsed && typeof parsed === 'object') {
+          const merged: RaportSettings = { ...DEFAULT_RAPORT_SETTINGS, ...parsed };
+          if (merged.namaWaliKelas === 'Ustadz H. Ahmad Fauzi, S.Pd.I.') {
+            merged.namaWaliKelas = '';
+          }
+          if (merged.nipWaliKelas === '19840512 201001 1 008') {
+            merged.nipWaliKelas = '';
+          }
+          if (merged.namaKepalaKepesantrenan === 'KH. Syamsuddin Mahmud, Lc.') {
+            merged.namaKepalaKepesantrenan = '';
+          }
+          if (merged.namaPesantren === 'PESANTREN MODERN AL-HIKMAH' || !merged.namaPesantren) {
+            merged.namaPesantren = 'PONDOK PESANTREN MODERN AL-HIKMAH';
+          }
+          if (merged.logoUrl === '/logo-alhikmah.svg' || merged.logoUrl?.includes('viewBox="0 0 120 120"')) {
+            merged.logoUrl = '';
+          }
+          return merged;
         }
-        if (parsed.nipWaliKelas === '19840512 201001 1 008') {
-          parsed.nipWaliKelas = '';
-        }
-        if (parsed.namaKepalaKepesantrenan === 'KH. Syamsuddin Mahmud, Lc.') {
-          parsed.namaKepalaKepesantrenan = '';
-        }
-        if (parsed.namaPesantren === 'PESANTREN MODERN AL-HIKMAH' || !parsed.namaPesantren) {
-          parsed.namaPesantren = 'PONDOK PESANTREN MODERN AL-HIKMAH';
-        }
-        if (parsed.logoUrl === '/logo-alhikmah.svg' || parsed.logoUrl?.includes('viewBox="0 0 120 120"')) {
-          parsed.logoUrl = '';
-        }
-        return parsed;
-      } catch (e) {}
+      }
+    } catch (e) {
+      console.error('Settings load error:', e);
     }
     return DEFAULT_RAPORT_SETTINGS;
   });
 
   const [santriList, setSantriList] = useState<Santri[]>(() => {
-    const saved = localStorage.getItem('alhikmah_santri');
-    if (saved) {
-      try {
-        const parsed: Santri[] = JSON.parse(saved);
-        const sampleIds = ['santri-1', 'santri-2', 'santri-3', 'santri-4'];
-        const sampleNames = ['wGW', 'Muhammad Zaidan Al-Fatih', 'Ahmad Faris Hidayat', 'Bilal Ramadhan'];
-        return parsed.filter(
-          (s) => !sampleIds.includes(s.id) && !sampleNames.includes(s.namaLengkap)
-        );
-      } catch (e) {}
+    try {
+      const saved = localStorage.getItem('alhikmah_santri');
+      if (saved && saved !== 'undefined' && saved !== 'null') {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const sampleIds = ['santri-1', 'santri-2', 'santri-3', 'santri-4'];
+          const sampleNames = ['wGW', 'Muhammad Zaidan Al-Fatih', 'Ahmad Faris Hidayat', 'Bilal Ramadhan'];
+          return parsed.filter(
+            (s) => s && !sampleIds.includes(s.id) && !sampleNames.includes(s.namaLengkap)
+          );
+        }
+      }
+    } catch (e) {
+      console.error('Santri load error:', e);
     }
     return DEFAULT_SANTRI_LIST;
   });
 
   const [mapelList, setMapelList] = useState<MataPelajaran[]>(() => {
-    const saved = localStorage.getItem('alhikmah_mapel');
-    return saved ? JSON.parse(saved) : DEFAULT_MAPEL_LIST;
+    try {
+      const saved = localStorage.getItem('alhikmah_mapel');
+      if (saved && saved !== 'undefined' && saved !== 'null') {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_MAPEL_LIST;
   });
 
   const [nilaiMap, setNilaiMap] = useState<Record<string, NilaiSantri>>(() => {
-    const saved = localStorage.getItem('alhikmah_nilai_map');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('alhikmah_nilai_map');
+      if (saved && saved !== 'undefined' && saved !== 'null') {
         const parsed = JSON.parse(saved);
-        delete parsed['santri-1'];
-        delete parsed['santri-2'];
-        delete parsed['santri-3'];
-        delete parsed['santri-4'];
-        return parsed;
-      } catch (e) {}
-    }
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          delete parsed['santri-1'];
+          delete parsed['santri-2'];
+          delete parsed['santri-3'];
+          delete parsed['santri-4'];
+          return parsed;
+        }
+      }
+    } catch (e) {}
     return DEFAULT_NILAI_MAP;
   });
 
@@ -251,6 +284,38 @@ export default function App() {
     }
   }, []);
 
+  // Background fetch from server to keep data synchronized across all devices & Google accounts
+  useEffect(() => {
+    fetch('/api/sync-all')
+      .then((res) => {
+        if (res.ok) return res.json();
+        throw new Error('Server unreachable');
+      })
+      .then((data) => {
+        if (data) {
+          if (Array.isArray(data.users) && data.users.length > 0) {
+            setUsers(data.users);
+            localStorage.setItem('alhikmah_users', JSON.stringify(data.users));
+          }
+          if (data.settings && typeof data.settings === 'object') {
+            setSettings((prev) => ({ ...prev, ...data.settings }));
+            localStorage.setItem('alhikmah_settings', JSON.stringify(data.settings));
+          }
+          if (Array.isArray(data.santriList) && data.santriList.length > 0) {
+            setSantriList(data.santriList);
+            localStorage.setItem('alhikmah_santri', JSON.stringify(data.santriList));
+          }
+          if (data.nilaiMap && typeof data.nilaiMap === 'object' && Object.keys(data.nilaiMap).length > 0) {
+            setNilaiMap(data.nilaiMap);
+            localStorage.setItem('alhikmah_nilai_map', JSON.stringify(data.nilaiMap));
+          }
+        }
+      })
+      .catch(() => {
+        // Fallback silently to client storage
+      });
+  }, []);
+
   // Sync to SessionStorage and LocalStorage
   useEffect(() => {
     if (currentUser) {
@@ -306,46 +371,97 @@ export default function App() {
   };
 
   const handleSaveNilai = (newNilai: NilaiSantri) => {
-    setNilaiMap((prev) => ({
-      ...prev,
-      [newNilai.santriId]: newNilai,
-    }));
+    setNilaiMap((prev) => {
+      const next = {
+        ...prev,
+        [newNilai.santriId]: newNilai,
+      };
+      fetch('/api/nilai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      }).catch(() => {});
+      return next;
+    });
   };
 
   const handleSaveSantri = (santri: Santri) => {
     setSantriList((prev) => {
       const idx = prev.findIndex((s) => s.id === santri.id);
+      let updated: Santri[];
       if (idx >= 0) {
-        const updated = [...prev];
+        updated = [...prev];
         updated[idx] = santri;
-        return updated;
+      } else {
+        updated = [...prev, santri];
       }
-      return [...prev, santri];
+      fetch('/api/santri', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => {});
+      return updated;
     });
   };
 
   const handleDeleteSantri = (id: string) => {
-    setSantriList((prev) => prev.filter((s) => s.id !== id));
+    setSantriList((prev) => {
+      const updated = prev.filter((s) => s.id !== id);
+      fetch('/api/santri', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => {});
+      return updated;
+    });
   };
 
   const handleImportSantri = (imported: Santri[]) => {
     setSantriList(imported);
+    fetch('/api/santri', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(imported),
+    }).catch(() => {});
   };
 
   const handleImportNilai = (importedMap: Record<string, NilaiSantri>) => {
     setNilaiMap(importedMap);
+    fetch('/api/nilai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(importedMap),
+    }).catch(() => {});
   };
 
   const handleUpdateLogo = (logoUrl: string) => {
-    setSettings((prev) => ({ ...prev, logoUrl }));
+    setSettings((prev) => {
+      const next = { ...prev, logoUrl };
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      }).catch(() => {});
+      return next;
+    });
   };
 
   const handleBatchUpdateSantri = (updated: Santri[]) => {
     setSantriList(updated);
+    fetch('/api/santri', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    }).catch(() => {});
   };
 
   const handleSaveSettings = (newSettings: RaportSettings) => {
     setSettings(newSettings);
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSettings),
+    }).catch(() => {});
   };
 
   const handleAddUser = (user: AppUser) => {
@@ -356,6 +472,12 @@ export default function App() {
       } catch (e) {}
       return next;
     });
+
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user),
+    }).catch((err) => console.error('Error saving user to server:', err));
   };
 
   const handleUpdateUser = (updatedUser: AppUser) => {
@@ -369,6 +491,12 @@ export default function App() {
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
     }
+
+    fetch(`/api/users/${updatedUser.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedUser),
+    }).catch((err) => console.error('Error updating user on server:', err));
   };
 
   const handleDeleteUser = (id: string) => {
@@ -379,15 +507,31 @@ export default function App() {
       } catch (e) {}
       return next;
     });
+
+    fetch(`/api/users/${id}`, {
+      method: 'DELETE',
+    }).catch((err) => console.error('Error deleting user on server:', err));
   };
 
   const handleSetActiveWaliKelas = (waliKelas: AppUser) => {
-    setSettings((prev) => ({
-      ...prev,
-      namaWaliKelas: waliKelas.namaLengkap || waliKelas.fullName,
-      nipWaliKelas: waliKelas.nip || prev.nipWaliKelas || '',
-      namaKelas: waliKelas.kelasAkses || waliKelas.assignedClass || prev.namaKelas,
-    }));
+    const waliName = waliKelas.namaLengkap || waliKelas.fullName || '';
+    const waliNip = waliKelas.nip || '';
+    const waliKelasBinaan = waliKelas.kelasAkses || waliKelas.assignedClass || settings?.namaKelas || '7 MTS PUTRA';
+
+    setSettings((prev) => {
+      const next = {
+        ...prev,
+        namaWaliKelas: waliName,
+        nipWaliKelas: waliNip || prev.nipWaliKelas || '',
+        namaKelas: waliKelasBinaan,
+      };
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      }).catch(() => {});
+      return next;
+    });
   };
 
   const handleUpdateAllDataFromSheet = (data: {
@@ -402,6 +546,12 @@ export default function App() {
     if (data.nilaiMap) setNilaiMap(data.nilaiMap);
     if (data.settings) setSettings(data.settings);
     if (data.users) setUsers(data.users);
+
+    fetch('/api/sync-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).catch(() => {});
   };
 
   const handleBatchSaveNilai = (updatedMap: Record<string, NilaiSantri>) => {
@@ -409,6 +559,12 @@ export default function App() {
     try {
       localStorage.setItem('alhikmah_nilai_map', JSON.stringify(updatedMap));
     } catch (e) {}
+
+    fetch('/api/nilai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedMap),
+    }).catch(() => {});
   };
 
   // If not logged in, show Login Screen

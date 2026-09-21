@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AppUser, RaportSettings } from '../types';
 import {
   Lock,
@@ -31,9 +31,33 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, settings, onLogin }
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [serverUsers, setServerUsers] = useState<AppUser[] | null>(null);
 
-  // Always sync with the latest localStorage users list if available
+  // Fetch users from server to ensure any account created by Admin is immediately valid across all Google accounts & devices
+  useEffect(() => {
+    fetch('/api/users')
+      .then((res) => {
+        if (res.ok) return res.json();
+        throw new Error('Failed to load users');
+      })
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setServerUsers(data);
+          try {
+            localStorage.setItem('alhikmah_users', JSON.stringify(data));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {
+        // Silently use localStorage fallback
+      });
+  }, []);
+
+  // Always sync with the latest server/localStorage users list
   const allUsers = useMemo<AppUser[]>(() => {
+    if (serverUsers && serverUsers.length > 0) {
+      return serverUsers;
+    }
     try {
       const saved = localStorage.getItem('alhikmah_users');
       if (saved) {
@@ -46,7 +70,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, settings, onLogin }
       console.error('Error reading users in LoginView:', e);
     }
     return users;
-  }, [users]);
+  }, [serverUsers, users]);
 
   // Registered Guru list created by Admin
   const registeredGuru = useMemo(() => {

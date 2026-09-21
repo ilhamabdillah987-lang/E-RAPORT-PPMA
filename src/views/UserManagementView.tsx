@@ -256,10 +256,12 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   };
 
   // Filtered users
-  const filteredUsers = users.filter((u) => {
+  const safeUsers = useMemo(() => (Array.isArray(users) ? users : []), [users]);
+  const filteredUsers = safeUsers.filter((u) => {
+    if (!u) return false;
     const matchRole = filterRole === 'all' ? true : u.role === filterRole;
     const name = (u.namaLengkap || u.fullName || '').toLowerCase();
-    const uname = u.username.toLowerCase();
+    const uname = (u.username || '').toLowerCase();
     const kls = (u.kelasAkses || u.assignedClass || '').toLowerCase();
     const mapel = (u.mapelAkses || []).join(' ').toLowerCase();
     const q = searchQuery.toLowerCase().trim();
@@ -268,9 +270,9 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     return matchRole && matchSearch;
   });
 
-  const totalWaliKelas = users.filter((u) => u.role === 'walikelas').length;
-  const totalGuru = users.filter((u) => u.role === 'guru').length;
-  const totalAdmin = users.filter((u) => u.role === 'admin').length;
+  const totalWaliKelas = safeUsers.filter((u) => u?.role === 'walikelas').length;
+  const totalGuru = safeUsers.filter((u) => u?.role === 'guru').length;
+  const totalAdmin = safeUsers.filter((u) => u?.role === 'admin').length;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -330,15 +332,15 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             Wali Kelas Aktif Pada Format Cetak Raport Saat Ini:
           </div>
           <div className="text-base font-black tracking-wide">
-            {settings.namaWaliKelas || 'Belum Ditetapkan'}{' '}
-            {settings.nipWaliKelas ? (
+            {settings?.namaWaliKelas || 'Belum Ditetapkan'}{' '}
+            {settings?.nipWaliKelas ? (
               <span className="text-xs font-normal text-emerald-200">({settings.nipWaliKelas})</span>
             ) : null}
           </div>
           <div className="text-xs text-emerald-200">
             Kelas Binaan:{' '}
             <span className="font-bold text-white uppercase bg-emerald-800/80 px-2 py-0.5 rounded-md">
-              {settings.namaKelas}
+              {settings?.namaKelas || '7 MTS PUTRA'}
             </span>
           </div>
         </div>
@@ -437,17 +439,23 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                 </tr>
               ) : (
                 filteredUsers.map((u, i) => {
+                  const currentActiveWaliName = (settings?.namaWaliKelas || '').trim().toLowerCase();
+                  const currentCandidateName = (u.namaLengkap || u.fullName || '').trim().toLowerCase();
                   const isCurrentActiveWali =
                     u.role === 'walikelas' &&
-                    settings.namaWaliKelas.toLowerCase() ===
-                      (u.namaLengkap || u.fullName).toLowerCase();
+                    currentActiveWaliName !== '' &&
+                    currentCandidateName !== '' &&
+                    currentActiveWaliName === currentCandidateName;
 
                   // Find assigned mapel objects
-                  const assignedMapels = mapelList.filter(
+                  const assignedMapels = (mapelList || []).filter(
                     (m) =>
                       u.assignedMapelIds?.includes(m.id) ||
                       u.mapelAkses?.includes(m.nama)
                   );
+
+                  const displayName = (u.namaLengkap || u.fullName || u.username || 'Pengguna').trim();
+                  const avatarInitial = (displayName[0] || 'U').toUpperCase();
 
                   return (
                     <tr
@@ -471,11 +479,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                                 : 'bg-blue-100 text-blue-800'
                             }`}
                           >
-                            {(u.namaLengkap || u.fullName || 'U')[0].toUpperCase()}
+                            {avatarInitial}
                           </div>
                           <div>
                             <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                              <span>{u.namaLengkap || u.fullName}</span>
+                              <span>{displayName}</span>
                               {isCurrentActiveWali && (
                                 <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-emerald-600 text-white tracking-wider">
                                   Aktif di Raport
@@ -599,9 +607,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                               onClick={() => {
                                 onSetActiveWaliKelas(u);
                                 setSuccessMsg(
-                                  `"${
-                                    u.namaLengkap || u.fullName
-                                  }" sekarang ditetapkan sebagai Wali Kelas aktif di Raport!`
+                                  `"${displayName}" sekarang ditetapkan sebagai Wali Kelas aktif di Raport!`
                                 );
                                 setTimeout(() => setSuccessMsg(''), 3000);
                               }}
@@ -638,7 +644,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                               onClick={() => {
                                 if (
                                   window.confirm(
-                                    `Hapus akun ${u.namaLengkap || u.fullName} (${u.username})?`
+                                    `Hapus akun ${displayName} (${u.username})?`
                                   )
                                 ) {
                                   onDeleteUser(u.id);
