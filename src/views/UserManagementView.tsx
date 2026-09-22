@@ -21,7 +21,16 @@ import {
   Filter,
   BookOpen,
   GraduationCap,
+  Cloud,
+  Share2,
+  RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
+import {
+  saveSharedUsers,
+  generateSyncUrl,
+  generateSyncCode,
+} from '../services/cloudSync';
 
 interface UserManagementViewProps {
   users: AppUser[];
@@ -274,6 +283,44 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   const totalGuru = safeUsers.filter((u) => u?.role === 'guru').length;
   const totalAdmin = safeUsers.filter((u) => u?.role === 'admin').length;
 
+  // Cloud Sync state
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [cloudSyncMessage, setCloudSyncMessage] = useState<string | null>(null);
+  const [copiedSyncUrl, setCopiedSyncUrl] = useState(false);
+  const [copiedSyncCode, setCopiedSyncCode] = useState(false);
+
+  const handleSyncToCloudNow = async () => {
+    setIsSyncingCloud(true);
+    setCloudSyncMessage(null);
+    try {
+      const ok = await saveSharedUsers(users);
+      if (ok) {
+        setCloudSyncMessage('Berhasil! Seluruh akun pengguna telah tersimpan ke server cloud.');
+      } else {
+        setCloudSyncMessage('Tersimpan di cache lokal & relay backup.');
+      }
+    } catch (e: any) {
+      setCloudSyncMessage(`Status: ${e.message || 'Tersimpan lokal'}`);
+    } finally {
+      setIsSyncingCloud(false);
+      setTimeout(() => setCloudSyncMessage(null), 4000);
+    }
+  };
+
+  const handleCopyDirectLink = () => {
+    const url = generateSyncUrl(users, 'https://e-raport-ppma.vercel.app');
+    navigator.clipboard.writeText(url);
+    setCopiedSyncUrl(true);
+    setTimeout(() => setCopiedSyncUrl(false), 2500);
+  };
+
+  const handleCopySyncCode = () => {
+    const code = generateSyncCode(users);
+    navigator.clipboard.writeText(code);
+    setCopiedSyncCode(true);
+    setTimeout(() => setCopiedSyncCode(false), 2500);
+  };
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header Banner */}
@@ -348,6 +395,56 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         <div className="text-xs text-emerald-100/80 bg-white/10 p-3 rounded-2xl border border-white/10 max-w-sm">
           💡 <strong>Tips Admin:</strong> Klik tombol <em>"Jadikan Wali Kelas di Raport"</em> pada daftar di bawah untuk langsung menetapkan nama wali kelas pada lembar cetak raport. Untuk akun <strong>Guru Pengajar</strong>, Anda dapat menentukan mata pelajaran apa saja yang diampunya.
         </div>
+      </div>
+
+      {/* Cloud Sync & Share Card for Vercel */}
+      <div className="bg-white p-5 rounded-3xl border border-blue-100 shadow-xs bg-linear-to-br from-white to-blue-50/40">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 bg-blue-100 text-blue-800 rounded-lg">
+                <Cloud className="w-4 h-4" />
+              </span>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                Sinkronisasi Cloud & Berbagi Akses Akun
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                Online Global
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
+              Semua akun guru & wali kelas yang Anda buat otomatis tersimpan ke Cloud Relay sehingga <strong>siapapun yang membuka <code className="bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded font-mono text-[11px]">https://e-raport-ppma.vercel.app/</code> langsung bisa login</strong> menggunakan username dan password tersebut dari perangkat manapun.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleSyncToCloudNow}
+              disabled={isSyncingCloud}
+              className="flex items-center gap-2 px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+              <span>{isSyncingCloud ? 'Menyinkronkan...' : 'Sinkronkan Ulang Cloud'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopyDirectLink}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-900/15 transition-all cursor-pointer"
+            >
+              {copiedSyncUrl ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+              <span>{copiedSyncUrl ? 'Link Tersalin!' : 'Salin Link Instan'}</span>
+            </button>
+          </div>
+        </div>
+
+        {cloudSyncMessage && (
+          <div className="mt-3 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>{cloudSyncMessage}</span>
+          </div>
+        )}
       </div>
 
       {/* Filters & Search Toolbar */}

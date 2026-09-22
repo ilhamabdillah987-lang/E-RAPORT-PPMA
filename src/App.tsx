@@ -29,6 +29,11 @@ import { SettingRaportView } from './views/SettingRaportView';
 import { GoogleSheetSyncView } from './views/GoogleSheetSyncView';
 import { UserManagementView } from './views/UserManagementView';
 import { DownloadDataRaportView } from './views/DownloadDataRaportView';
+import {
+  fetchSharedUsers,
+  saveSharedUsers,
+  syncFromUrlHash,
+} from './services/cloudSync';
 
 import {
   PenTool,
@@ -284,8 +289,22 @@ export default function App() {
     }
   }, []);
 
-  // Background fetch from server to keep data synchronized across all devices & Google accounts
+  // Background fetch from cloud relay and server to keep users and data synchronized across all devices & Vercel
   useEffect(() => {
+    // 1. Fetch shared users across devices (Vercel, mobile, desktop)
+    fetchSharedUsers().then((sharedUsers) => {
+      if (sharedUsers && sharedUsers.length > 0) {
+        setUsers(sharedUsers);
+      }
+    });
+
+    // 2. Check if URL contains instant sync settings
+    const urlSync = syncFromUrlHash();
+    if (urlSync?.settings) {
+      setSettings((prev) => ({ ...prev, ...urlSync.settings }));
+    }
+
+    // 3. Background fetch from server if Express / Node backend is reachable
     fetch('/api/sync-all')
       .then((res) => {
         if (res.ok) return res.json();
@@ -312,7 +331,7 @@ export default function App() {
         }
       })
       .catch(() => {
-        // Fallback silently to client storage
+        // Fallback silently to client storage / cloud relay
       });
   }, []);
 
@@ -470,6 +489,7 @@ export default function App() {
       try {
         localStorage.setItem('alhikmah_users', JSON.stringify(next));
       } catch (e) {}
+      saveSharedUsers(next).catch(() => {});
       return next;
     });
 
@@ -486,6 +506,7 @@ export default function App() {
       try {
         localStorage.setItem('alhikmah_users', JSON.stringify(next));
       } catch (e) {}
+      saveSharedUsers(next).catch(() => {});
       return next;
     });
     if (currentUser && currentUser.id === updatedUser.id) {
@@ -505,6 +526,7 @@ export default function App() {
       try {
         localStorage.setItem('alhikmah_users', JSON.stringify(next));
       } catch (e) {}
+      saveSharedUsers(next).catch(() => {});
       return next;
     });
 

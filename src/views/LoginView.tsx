@@ -15,7 +15,15 @@ import {
   CheckCircle2,
   KeyRound,
   BookOpen,
+  RefreshCw,
+  QrCode,
+  Check,
 } from 'lucide-react';
+import {
+  fetchSharedUsers,
+  applySyncCode,
+  syncFromUrlHash,
+} from '../services/cloudSync';
 
 interface LoginViewProps {
   users: AppUser[];
@@ -32,26 +40,75 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, settings, onLogin }
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [serverUsers, setServerUsers] = useState<AppUser[] | null>(null);
+  const [isRefreshingCloud, setIsRefreshingCloud] = useState(false);
+  const [cloudStatusMsg, setCloudStatusMsg] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [manualSyncCode, setManualSyncCode] = useState('');
+  const [syncCodeResult, setSyncCodeResult] = useState<string | null>(null);
 
-  // Fetch users from server to ensure any account created by Admin is immediately valid across all Google accounts & devices
+  // Fetch users from cloud relay, server, and URL hash
   useEffect(() => {
-    fetch('/api/users')
-      .then((res) => {
-        if (res.ok) return res.json();
-        throw new Error('Failed to load users');
-      })
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setServerUsers(data);
-          try {
-            localStorage.setItem('alhikmah_users', JSON.stringify(data));
-          } catch (e) {}
-        }
-      })
-      .catch(() => {
-        // Silently use localStorage fallback
+    // 1. Check URL hash for direct instant sync
+    const urlSync = syncFromUrlHash();
+    if (urlSync && urlSync.users.length > 0) {
+      setServerUsers(urlSync.users);
+      setCloudStatusMsg({
+        type: 'success',
+        text: `Sinkronisasi Tautan Berhasil! ${urlSync.users.length} akun pengguna dari Admin telah dimuat.`,
       });
+      return;
+    }
+
+    // 2. Fetch from cloud relay and server
+    fetchSharedUsers().then((shared) => {
+      if (shared && shared.length > 0) {
+        setServerUsers(shared);
+      }
+    });
   }, []);
+
+  const handleManualRefreshCloud = async () => {
+    setIsRefreshingCloud(true);
+    setCloudStatusMsg(null);
+    try {
+      const fresh = await fetchSharedUsers();
+      if (fresh && fresh.length > 0) {
+        setServerUsers(fresh);
+        setCloudStatusMsg({
+          type: 'success',
+          text: `Berhasil menyinkronkan! ${fresh.length} akun pengguna terbaru telah aktif.`,
+        });
+      } else {
+        setCloudStatusMsg({
+          type: 'info',
+          text: 'Data akun sudah sinkron dengan versi terbaru.',
+        });
+      }
+    } catch (e: any) {
+      setCloudStatusMsg({
+        type: 'error',
+        text: `Gagal memperbarui dari cloud: ${e.message || e}`,
+      });
+    } finally {
+      setIsRefreshingCloud(false);
+    }
+  };
+
+  const handleApplySyncCode = () => {
+    if (!manualSyncCode.trim()) return;
+    const res = applySyncCode(manualSyncCode.trim());
+    if (res && res.users.length > 0) {
+      setServerUsers(res.users);
+      setSyncCodeResult(`Berhasil! ${res.users.length} akun pengguna telah dimuat.`);
+      setTimeout(() => {
+        setIsSyncModalOpen(false);
+        setSyncCodeResult(null);
+        setManualSyncCode('');
+      }, 1500);
+    } else {
+      setSyncCodeResult('Kode sinkronisasi tidak valid. Pastikan Anda menyalin kode lengkap dari Admin.');
+    }
+  };
 
   // Always sync with the latest server/localStorage users list
   const allUsers = useMemo<AppUser[]>(() => {
@@ -92,7 +149,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, settings, onLogin }
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -109,18 +166,34 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, settings, onLogin }
     }
 
     // 1. Check if user exists by username (case-insensitive)
-    const matchedUser = allUsers.find(
+    let matchedUser = allUsers.find(
       (u) => u.username.trim().toLowerCase() === cleanUsername
     );
+
+    // If not found in current local state, do a fast live fetch from cloud relay
+    if (!matchedUser) {
+      try {
+        const liveUsers = await fetchSharedUsers();
+        if (liveUsers && liveUsers.length > 0) {
+          setServerUsers(liveUsers);
+          const found = liveUsers.find(
+            (u) => u.username.trim().toLowerCase() === cleanUsername
+          );
+          if (found) {
+            matchedUser = found;
+          }
+        }
+      } catch (e) {}
+    }
 
     if (!matchedUser) {
       if (loginMode === 'guru') {
         setError(
-          `Username "${username.trim()}" tidak ditemukan. Pastikan Anda menggunakan username Guru Pengajar yang telah dibuatkan oleh Admin di akun admin.`
+          `Username "${username.trim()}" tidak ditemukan. Pastikan Anda menggunakan username Guru Pengajar yang telah dibuatkan oleh Admin.`
         );
       } else if (loginMode === 'walikelas') {
         setError(
-          `Username "${username.trim()}" tidak ditemukan. Pastikan Anda menggunakan username Wali Kelas yang telah dibuatkan oleh Admin di akun admin.`
+          `Username "${username.trim()}" tidak ditemukan. Pastikan Anda menggunakan username Wali Kelas yang telah dibuatkan oleh Admin.`
         );
       } else {
         setError(`Username "${username.trim()}" tidak ditemukan sebagai Administrator.`);

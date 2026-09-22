@@ -19,12 +19,14 @@ function doGet(e) {
   var santriSheet = ss.getSheetByName('Identitas_Santri');
   var nilaiSheet = ss.getSheetByName('Nilai_Santri');
   var settingsSheet = ss.getSheetByName('Setting_Raport');
+  var usersSheet = ss.getSheetByName('Daftar_Pengguna');
 
   var result = {
     status: 'success',
     santri: santriSheet ? getSheetData(santriSheet) : [],
     nilai: nilaiSheet ? getSheetData(nilaiSheet) : [],
-    settings: settingsSheet ? getSheetData(settingsSheet) : []
+    settings: settingsSheet ? getSheetData(settingsSheet) : [],
+    users: usersSheet ? getSheetData(usersSheet) : []
   };
 
   return ContentService.createTextOutput(JSON.stringify(result))
@@ -86,6 +88,26 @@ function doPost(e) {
         }
       }
       formatHeader(setSheet);
+    }
+
+    // 4. Simpan Daftar Pengguna & Hak Akses
+    if (payload.users && Array.isArray(payload.users)) {
+      var usersSheet = getOrCreateSheet(ss, 'Daftar_Pengguna');
+      usersSheet.clear();
+      usersSheet.appendRow(['ID', 'Username', 'Password', 'Nama Lengkap', 'Role', 'Kelas Akses', 'Mapel Akses JSON', 'Updated At']);
+      payload.users.forEach(function(u) {
+        usersSheet.appendRow([
+          u.id,
+          u.username,
+          u.password,
+          u.namaLengkap || u.fullName,
+          u.role,
+          u.kelasAkses || u.assignedClass || '',
+          JSON.stringify(u.mapelAkses || []),
+          new Date().toISOString()
+        ]);
+      });
+      formatHeader(usersSheet);
     }
 
     return ContentService.createTextOutput(JSON.stringify({

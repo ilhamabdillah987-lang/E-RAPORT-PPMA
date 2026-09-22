@@ -128,6 +128,67 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Auth Login Route - Centralized verification across all devices & accounts
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: 'Username dan password wajib diisi' });
+    }
+    const cleanUser = String(username).trim().toLowerCase();
+    const cleanPass = String(password).trim();
+
+    const user = currentStore.users.find(
+      (u) => (u.username || '').trim().toLowerCase() === cleanUser
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        code: 'USER_NOT_FOUND',
+        message: `Username "${username.trim()}" tidak ditemukan. Pastikan username sudah dibuat oleh Admin.`,
+      });
+    }
+
+    if (user.password !== password && (user.password || '').trim() !== cleanPass) {
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_PASSWORD',
+        message: `Password yang Anda masukkan salah untuk akun "${user.username}".`,
+      });
+    }
+
+    return res.json({ success: true, user, allUsers: currentStore.users });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Bidirectional User Sync - Merges client accounts with server accounts
+app.post('/api/users/sync', (req, res) => {
+  try {
+    const clientUsers = req.body?.users;
+    if (Array.isArray(clientUsers) && clientUsers.length > 0) {
+      clientUsers.forEach((clientUser) => {
+        if (!clientUser || !clientUser.username) return;
+        const cleanUser = clientUser.username.trim().toLowerCase();
+        const existingIdx = currentStore.users.findIndex(
+          (u) => (u.username || '').trim().toLowerCase() === cleanUser || u.id === clientUser.id
+        );
+        if (existingIdx >= 0) {
+          currentStore.users[existingIdx] = { ...currentStore.users[existingIdx], ...clientUser };
+        } else {
+          currentStore.users.push(clientUser);
+        }
+      });
+      saveStore(currentStore);
+    }
+    res.json({ success: true, users: currentStore.users });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 1. Get all users (Called on any device/Google account)
 app.get('/api/users', (req, res) => {
   res.json(currentStore.users);

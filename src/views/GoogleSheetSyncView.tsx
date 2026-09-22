@@ -227,16 +227,17 @@ export const GoogleSheetSyncView: React.FC<GoogleSheetSyncViewProps> = ({
         setIsProcessing(true);
         setStatusMsg(null);
         try {
-          await writeAllDataToSpreadsheet(
-            currentToken,
-            cleanId,
-            santriList,
-            mapelList,
-            nilaiMap,
-            settings
-          );
-          localStorage.setItem('alhikmah_active_sheet_id', cleanId);
-          showStatus('success', 'Data raport berhasil disinkronkan ke Google Spreadsheet!');
+            await writeAllDataToSpreadsheet(
+              currentToken,
+              cleanId,
+              santriList,
+              mapelList,
+              nilaiMap,
+              settings,
+              users
+            );
+            localStorage.setItem('alhikmah_active_sheet_id', cleanId);
+            showStatus('success', 'Data santri, raport, dan akun pengguna berhasil disinkronkan ke Google Spreadsheet!');
         } catch (err: any) {
           showStatus('error', `Gagal memperbarui spreadsheet: ${err.message || err}`);
         } finally {
@@ -271,15 +272,16 @@ export const GoogleSheetSyncView: React.FC<GoogleSheetSyncViewProps> = ({
         setStatusMsg(null);
         try {
           const result = await readAllDataFromSpreadsheet(currentToken, cleanId);
-          if (result.santriList || result.settings) {
+          if (result.santriList || result.settings || result.users) {
             onUpdateAllData({
               santriList: result.santriList,
               settings: result.settings ? ({ ...settings, ...result.settings } as any) : undefined,
+              users: result.users,
             });
             localStorage.setItem('alhikmah_active_sheet_id', cleanId);
             showStatus(
               'success',
-              `Berhasil menarik ${result.santriList?.length || 0} data santri dari Google Spreadsheet!`
+              `Berhasil menarik ${result.santriList?.length || 0} data santri dan ${result.users?.length || 0} akun pengguna dari Google Spreadsheet!`
             );
           } else {
             showStatus('info', 'Tidak ditemukan data santri pada sheet "Buku_Induk_Santri".');

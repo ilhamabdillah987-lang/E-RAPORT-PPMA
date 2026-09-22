@@ -1,4 +1,4 @@
-import { Santri, MataPelajaran, NilaiSantri, RaportSettings } from '../types';
+import { Santri, MataPelajaran, NilaiSantri, RaportSettings, AppUser } from '../types';
 
 export interface GoogleSpreadsheetItem {
   id: string;
@@ -96,7 +96,8 @@ export const writeAllDataToSpreadsheet = async (
   santriList: Santri[],
   mapelList: MataPelajaran[],
   nilaiMap: Record<string, NilaiSantri>,
-  settings: RaportSettings
+  settings: RaportSettings,
+  usersList?: AppUser[]
 ): Promise<void> => {
   // First, verify/create sheets if they don't exist
   const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
@@ -113,7 +114,7 @@ export const writeAllDataToSpreadsheet = async (
     (s: any) => s.properties?.title
   );
 
-  const neededSheets = ['Buku_Induk_Santri', 'Legger_Nilai', 'Pengaturan_Raport'];
+  const neededSheets = ['Buku_Induk_Santri', 'Legger_Nilai', 'Pengaturan_Raport', 'Akun_Pengguna'];
   const addSheetRequests = neededSheets
     .filter((title) => !existingSheetTitles.includes(title))
     .map((title) => ({
@@ -237,8 +238,20 @@ export const writeAllDataToSpreadsheet = async (
     ['Terakhir Diperbarui', new Date().toLocaleString('id-ID')],
   ];
 
+  // Prepare Users rows if provided
+  const usersHeader = ['ID', 'Username', 'Password', 'Nama Lengkap', 'Role', 'Kelas Akses', 'Mapel Akses JSON'];
+  const usersRows = (usersList || []).map((u) => [
+    u.id,
+    u.username,
+    u.password,
+    u.namaLengkap || u.fullName,
+    u.role,
+    u.kelasAkses || u.assignedClass || '',
+    JSON.stringify(u.mapelAkses || []),
+  ]);
+
   // Batch update values
-  const batchData = [
+  const batchData: any[] = [
     {
       range: 'Buku_Induk_Santri!A1:V' + (santriRows.length + 1),
       values: [santriHeader, ...santriRows],
@@ -252,6 +265,13 @@ export const writeAllDataToSpreadsheet = async (
       values: settingsRows,
     },
   ];
+
+  if (usersRows.length > 0) {
+    batchData.push({
+      range: 'Akun_Pengguna!A1:G' + (usersRows.length + 1),
+      values: [usersHeader, ...usersRows],
+    });
+  }
 
   const updateRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
@@ -282,9 +302,10 @@ export const readAllDataFromSpreadsheet = async (
   santriList?: Santri[];
   nilaiMap?: Record<string, NilaiSantri>;
   settings?: Partial<RaportSettings>;
+  users?: AppUser[];
 }> => {
   // Fetch values from the sheets
-  const ranges = ['Buku_Induk_Santri!A1:V100', 'Legger_Nilai!A1:ZZ100', 'Pengaturan_Raport!A1:B30'];
+  const ranges = ['Buku_Induk_Santri!A1:V100', 'Legger_Nilai!A1:ZZ100', 'Pengaturan_Raport!A1:B30', 'Akun_Pengguna!A1:G100'];
   const res = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?ranges=${ranges.map((r) => encodeURIComponent(r)).join('&ranges=')}`,
     {
@@ -302,6 +323,7 @@ export const readAllDataFromSpreadsheet = async (
 
   const santriRange = valueRanges[0]?.values || [];
   const settingsRange = valueRanges[2]?.values || [];
+  const usersRange = valueRanges[3]?.values || [];
 
   const santriList: Santri[] = [];
   if (santriRange.length > 1) {
@@ -364,8 +386,37 @@ export const readAllDataFromSpreadsheet = async (
     });
   }
 
+  // Parse Users
+  const parsedUsers: AppUser[] = [];
+  if (usersRange.length > 1) {
+    for (let i = 1; i < usersRange.length; i++) {
+      const row = usersRange[i];
+      if (!row || !row[1]) continue; // requires username
+      let mapelAkses: string[] = [];
+      try {
+        if (row[6]) {
+          mapelAkses = JSON.parse(row[6]);
+        }
+      } catch (e) {}
+
+      parsedUsers.push({
+        id: String(row[0] || `user-${Date.now()}-${i}`),
+        username: String(row[1] || '').trim(),
+        password: String(row[2] || ''),
+        fullName: String(row[3] || ''),
+        namaLengkap: String(row[3] || ''),
+        role: (row[4] === 'admin' || row[4] === 'walikelas' || row[4] === 'guru') ? row[4] : 'guru',
+        kelasAkses: String(row[5] || ''),
+        assignedClass: String(row[5] || ''),
+        mapelAkses,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
   return {
     santriList: santriList.length > 0 ? santriList : undefined,
     settings: Object.keys(settingsPartial).length > 0 ? settingsPartial : undefined,
+    users: parsedUsers.length > 0 ? parsedUsers : undefined,
   };
 };
