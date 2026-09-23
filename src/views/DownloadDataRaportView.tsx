@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Santri, MataPelajaran, NilaiSantri, RaportSettings } from '../types';
-import { exportAllDataXLSX, exportSantriTemplate, exportNilaiTemplate } from '../utils/googleSheets';
+import {
+  exportAllDataCustomXLSX,
+  exportSantriTemplate,
+  exportNilaiTemplate,
+  exportLeggerXLSX,
+} from '../utils/excelTemplates';
 import {
   Download,
   FileSpreadsheet,
@@ -145,77 +150,24 @@ export const DownloadDataRaportView: React.FC<DownloadDataRaportViewProps> = ({
     setTimeout(() => setDownloadSuccessMsg(''), 4000);
   };
 
-  // Download Legger Nilai Saja (.xlsx)
-  const handleDownloadLeggerOnly = () => {
-    const wb = XLSX.utils.book_new();
-    const rows = filteredSantri.map((s) => {
-      const n = nilaiMap[s.id];
-      const rowObj: any = {
-        'No Absen': s.nomorUrutAbsen,
-        'NIS': s.nis,
-        'Nama Lengkap': s.namaLengkap,
-        'Kelas': s.kelasSaatIni,
-      };
-
-      let totalAvg = 0;
-      let count = 0;
-
-      mapelList.forEach((m) => {
-        const item = n?.akademik?.[m.id];
-        const tulis = item?.tulis?.skor || 0;
-        const lisan = item?.lisan?.skor || 0;
-        const avg = (tulis + lisan) / 2;
-
-        rowObj[`${m.nama} (T)`] = tulis;
-        rowObj[`${m.nama} (L)`] = lisan;
-        rowObj[`${m.nama} (Rata-rata)`] = avg;
-        totalAvg += avg;
-        count++;
-      });
-
-      rowObj['Rata-Rata Akhir'] = count > 0 ? Number((totalAvg / count).toFixed(2)) : 0;
-      rowObj['Sakit'] = n?.kehadiran?.sakit || 0;
-      rowObj['Izin'] = n?.kehadiran?.izin || 0;
-      rowObj['Tanpa Keterangan'] = n?.kehadiran?.tanpaKeterangan || 0;
-
-      return rowObj;
-    });
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, 'Legger_Nilai');
-    const classNameSuffix = selectedClass === 'all' ? 'Semua_Kelas' : selectedClass.replace(/\s+/g, '_');
-    XLSX.writeFile(wb, `Legger_Nilai_Raport_${classNameSuffix}_${settings.tahunPelajaran.replace('/', '-')}.xlsx`);
+  // Download Legger Nilai Saja (.xlsx) - Styled matching Screenshot 92
+  const handleDownloadLeggerOnly = async () => {
+    await exportLeggerXLSX(
+      mapelList,
+      filteredSantri,
+      nilaiMap,
+      settings,
+      selectedClass === 'all' ? '' : selectedClass
+    );
     showSuccess('File Rekap Legger Nilai Raport Excel berhasil diunduh!');
   };
 
-  // Download Identitas Santri Saja (.xlsx)
-  const handleDownloadIdentitasOnly = () => {
-    const wb = XLSX.utils.book_new();
-    const rows = filteredSantri.map((s) => ({
-      'No Absen': s.nomorUrutAbsen,
-      'Nama Lengkap': s.namaLengkap,
-      'NIS': s.nis,
-      'NISN': s.nisn,
-      'Tempat Lahir': s.tempatLahir,
-      'Tanggal Lahir': s.tanggalLahir,
-      'Jenis Kelamin': s.jenisKelamin,
-      'Agama': s.agama,
-      'Kelas Saat Ini': s.kelasSaatIni,
-      'Status': s.statusSantri,
-      'Alamat Santri': s.alamatSantri,
-      'No Telp': s.teleponRumah,
-      'Sekolah Asal': s.sekolahAsal,
-      'Nama Ayah': s.namaAyah,
-      'Pekerjaan Ayah': s.pekerjaanAyah,
-      'Nama Ibu': s.namaIbu,
-      'Pekerjaan Ibu': s.pekerjaanIbu,
-      'Nama Wali': s.namaWali,
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, 'Buku_Induk_Santri');
-    const classNameSuffix = selectedClass === 'all' ? 'Semua_Kelas' : selectedClass.replace(/\s+/g, '_');
-    XLSX.writeFile(wb, `Buku_Induk_Santri_${classNameSuffix}.xlsx`);
+  // Download Identitas Santri Saja (.xlsx) - Styled matching Screenshot 89
+  const handleDownloadIdentitasOnly = async () => {
+    await exportSantriTemplate(
+      filteredSantri,
+      selectedClass === 'all' ? '' : selectedClass
+    );
     showSuccess('Buku Induk Data Identitas Santri Excel berhasil diunduh!');
   };
 
@@ -418,8 +370,8 @@ export const DownloadDataRaportView: React.FC<DownloadDataRaportViewProps> = ({
 
             <button
               type="button"
-              onClick={() => {
-                exportAllDataXLSX(filteredSantri, mapelList, nilaiMap);
+              onClick={async () => {
+                await exportAllDataCustomXLSX(filteredSantri, mapelList, nilaiMap, settings);
                 showSuccess('Data Raport Lengkap Excel berhasil diunduh!');
               }}
               className="px-6 py-3.5 bg-white hover:bg-emerald-50 text-emerald-900 font-black rounded-2xl text-xs shadow-lg cursor-pointer transition-all flex items-center gap-2 shrink-0"
@@ -493,8 +445,13 @@ export const DownloadDataRaportView: React.FC<DownloadDataRaportViewProps> = ({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    exportNilaiTemplate(mapelList, filteredSantri);
+                  onClick={async () => {
+                    await exportNilaiTemplate(
+                      mapelList,
+                      filteredSantri,
+                      nilaiMap,
+                      selectedClass === 'all' ? '' : selectedClass
+                    );
                     showSuccess('Template Nilai Excel berhasil diunduh!');
                   }}
                   className="flex-1 py-2.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded-xl text-[11px] border border-amber-200 flex items-center justify-center gap-1 cursor-pointer transition-all"
@@ -503,8 +460,11 @@ export const DownloadDataRaportView: React.FC<DownloadDataRaportViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    exportSantriTemplate();
+                  onClick={async () => {
+                    await exportSantriTemplate(
+                      filteredSantri,
+                      selectedClass === 'all' ? '' : selectedClass
+                    );
                     showSuccess('Template Santri Excel berhasil diunduh!');
                   }}
                   className="flex-1 py-2.5 px-2 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-[11px] border border-slate-200 flex items-center justify-center gap-1 cursor-pointer transition-all"

@@ -247,162 +247,47 @@ export async function fetchFromGoogleSheets(
   }
 }
 
-// Export Templates & Data to XLSX
-export function exportSantriTemplate() {
-  const wsData = [
-    [
-      'No Absen',
-      'Nama Lengkap',
-      'NIS',
-      'NISN',
-      'Tempat Lahir',
-      'Tanggal Lahir',
-      'Jenis Kelamin (Laki-laki/Perempuan)',
-      'Agama',
-      'Status Keluarga',
-      'Anak Ke',
-      'Alamat Santri',
-      'Telepon Rumah',
-      'Sekolah Asal',
-      'Diterima Di Kelas',
-      'Diterima Pada Tanggal',
-      'Nama Ayah',
-      'Nama Ibu',
-      'Alamat Orang Tua',
-      'Telepon Orang Tua',
-      'Pekerjaan Ayah',
-      'Pekerjaan Ibu',
-      'Nama Wali',
-      'Alamat Wali',
-      'Telepon Wali',
-      'Pekerjaan Wali',
-      'Kelas Saat Ini'
-    ],
-    [
-      1,
-      'Ahmad Syauqi',
-      '252607005',
-      '0091823901',
-      'Tangerang',
-      '10 Juni 2012',
-      'Laki-laki',
-      'Islam',
-      'Anak Kandung',
-      1,
-      'Kp. Sepatan RT.01/02',
-      '081234567890',
-      'MI Nurul Falah',
-      '7 MTS PUTRA',
-      '15 Juli 2025',
-      'H. Hasanuddin',
-      'Hj. Siti Mariam',
-      'Kp. Sepatan RT.01/02',
-      '081234567890',
-      'PNS',
-      'Guru',
-      '-',
-      '-',
-      '-',
-      '-',
-      '7 MTS PUTRA'
-    ]
-  ];
+import {
+  exportSantriTemplate as exportSantriTemplateCustom,
+  exportNilaiTemplate as exportNilaiTemplateCustom,
+  exportAllDataCustomXLSX,
+} from './excelTemplates';
 
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Template_Identitas_Santri');
-  XLSX.writeFile(wb, 'Template_Identitas_Santri_Al_Hikmah.xlsx');
+// Export Templates & Data to XLSX (Styled matching user screenshots)
+export async function exportSantriTemplate(santriList: Santri[] = [], className: string = '') {
+  await exportSantriTemplateCustom(santriList, className);
 }
 
-export function exportNilaiTemplate(mapelList: MataPelajaran[], santriList: Santri[]) {
-  const headers = ['No Absen', 'NIS', 'Nama Santri'];
-  mapelList.forEach((m) => {
-    headers.push(`${m.nama} (Tulis)`);
-    headers.push(`${m.nama} (Lisan)`);
-  });
-  headers.push('Sikap Spiritual', 'Sikap Sosial', 'Sakit', 'Izin', 'Tanpa Keterangan');
-
-  const rows: any[][] = [headers];
-  santriList.forEach((s) => {
-    const row = [s.nomorUrutAbsen, s.nis, s.namaLengkap];
-    mapelList.forEach(() => {
-      row.push(0 as any, 0 as any);
-    });
-    row.push(
-      'Tulis deskripsi sikap spiritual...' as any,
-      'Tulis deskripsi sikap sosial...' as any,
-      0 as any,
-      0 as any,
-      0 as any
-    );
-    rows.push(row);
-  });
-
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Template_Nilai');
-  XLSX.writeFile(wb, 'Template_Nilai_Santri_Al_Hikmah.xlsx');
+export async function exportNilaiTemplate(
+  mapelList: MataPelajaran[],
+  santriList: Santri[] = [],
+  nilaiMap: Record<string, NilaiSantri> = {},
+  className: string = ''
+) {
+  await exportNilaiTemplateCustom(mapelList, santriList, nilaiMap, className);
 }
 
-export function exportAllDataXLSX(santriList: Santri[], mapelList: MataPelajaran[], nilaiMap: Record<string, NilaiSantri>) {
-  const wb = XLSX.utils.book_new();
-
-  // Sheet 1: Identitas
-  const santriRows = santriList.map((s) => ({
-    'No Absen': s.nomorUrutAbsen,
-    'Nama Lengkap': s.namaLengkap,
-    'NIS': s.nis,
-    'NISN': s.nisn,
-    'Tempat Lahir': s.tempatLahir,
-    'Tanggal Lahir': s.tanggalLahir,
-    'Jenis Kelamin': s.jenisKelamin,
-    'Agama': s.agama,
-    'Kelas': s.kelasSaatIni,
-    'Status': s.statusSantri,
-    'Alamat': s.alamatSantri,
-    'Sekolah Asal': s.sekolahAsal,
-    'Nama Ayah': s.namaAyah,
-    'Nama Ibu': s.namaIbu,
-    'No Telp': s.teleponRumah
-  }));
-  const ws1 = XLSX.utils.json_to_sheet(santriRows);
-  XLSX.utils.book_append_sheet(wb, ws1, 'Identitas_Santri');
-
-  // Sheet 2: Legger Nilai
-  const leggerRows = santriList.map((s) => {
-    const n = nilaiMap[s.id];
-    const rowObj: any = {
-      'No Absen': s.nomorUrutAbsen,
-      'NIS': s.nis,
-      'Nama Santri': s.namaLengkap,
-      'Kelas': s.kelasSaatIni
-    };
-
-    let total = 0;
-    let count = 0;
-
-    mapelList.forEach((m) => {
-      const item = n?.akademik?.[m.id];
-      const tulis = item?.tulis?.skor || 0;
-      const lisan = item?.lisan?.skor || 0;
-      const avg = (tulis + lisan) / 2;
-      rowObj[`${m.nama} (T)`] = tulis;
-      rowObj[`${m.nama} (L)`] = lisan;
-      rowObj[`${m.nama} (R)`] = avg;
-      total += avg;
-      count++;
-    });
-
-    rowObj['Rata-Rata Total'] = count > 0 ? Number((total / count).toFixed(2)) : 0;
-    rowObj['Sakit'] = n?.kehadiran?.sakit || 0;
-    rowObj['Izin'] = n?.kehadiran?.izin || 0;
-    rowObj['Tanpa Ket.'] = n?.kehadiran?.tanpaKeterangan || 0;
-
-    return rowObj;
-  });
-
-  const ws2 = XLSX.utils.json_to_sheet(leggerRows);
-  XLSX.utils.book_append_sheet(wb, ws2, 'Legger_Nilai');
-
-  XLSX.writeFile(wb, `Data_Lengkap_Raport_Al_Hikmah_${new Date().toISOString().split('T')[0]}.xlsx`);
+export async function exportAllDataXLSX(
+  santriList: Santri[],
+  mapelList: MataPelajaran[],
+  nilaiMap: Record<string, NilaiSantri>,
+  settings?: RaportSettings
+) {
+  const dummySettings: RaportSettings = settings || {
+    namaYayasan: 'YAYASAN PENDIDIKAN ISLAM AL-HIKMAH',
+    namaPesantren: 'PONDOK PESANTREN MODERN AL-HIKMAH',
+    alamatPesantren: 'Jl. Al-Hikmah Kp. Pondok Jaya RT.05/01 Sepatan Tangerang',
+    namaKelas: santriList[0]?.kelasSaatIni || '7 MTS PUTRA',
+    semester: 'GANJIL',
+    tahunPelajaran: '2025/2026',
+    kotaCetak: 'Tangerang',
+    tanggalCetak: '20 Desember 2025',
+    namaWaliKelas: '',
+    nipWaliKelas: '',
+    namaKepalaKepesantrenan: '',
+    tanggalKenaikanKelulusan: '25 Juni 2026',
+    logoUrl: '',
+    googleSheetWebAppUrl: '',
+  };
+  await exportAllDataCustomXLSX(santriList, mapelList, nilaiMap, dummySettings);
 }
