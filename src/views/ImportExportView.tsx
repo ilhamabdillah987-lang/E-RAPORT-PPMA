@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Santri, MataPelajaran, NilaiSantri, RaportSettings } from '../types';
 import {
@@ -6,7 +6,18 @@ import {
   exportNilaiTemplate,
   exportAllDataCustomXLSX,
 } from '../utils/excelTemplates';
-import { Download, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { KELAS_OPTIONS } from '../data/defaultData';
+import {
+  Download,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  GraduationCap,
+  Users,
+  School,
+} from 'lucide-react';
 
 interface ImportExportViewProps {
   santriList: Santri[];
@@ -27,6 +38,63 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
 }) => {
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Available classes computed dynamically from santriList, settings, and standard list
+  const availableClasses = useMemo(() => {
+    const fromSantri = Array.from(
+      new Set(
+        santriList
+          .map((s) => (s.kelasSaatIni || '').trim())
+          .filter(Boolean)
+      )
+    );
+
+    const combined = Array.from(
+      new Set([
+        ...fromSantri,
+        settings.namaKelas,
+        ...KELAS_OPTIONS,
+      ])
+    ).filter(Boolean);
+
+    return combined.sort((a, b) => {
+      const countA = santriList.filter(
+        (s) => (s.kelasSaatIni || '').trim().toLowerCase() === a.toLowerCase()
+      ).length;
+      const countB = santriList.filter(
+        (s) => (s.kelasSaatIni || '').trim().toLowerCase() === b.toLowerCase()
+      ).length;
+      if (countA > 0 && countB === 0) return -1;
+      if (countB > 0 && countA === 0) return 1;
+      return a.localeCompare(b);
+    });
+  }, [santriList, settings.namaKelas]);
+
+  // Santri count per class
+  const studentCountPerClass = useMemo(() => {
+    const counts: Record<string, number> = {};
+    santriList.forEach((s) => {
+      const k = (s.kelasSaatIni || settings.namaKelas || '').trim();
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    return counts;
+  }, [santriList, settings.namaKelas]);
+
+  // Selected class for downloading specific template
+  const [selectedClass, setSelectedClass] = useState<string>(() => {
+    const firstWithSantri = santriList.find((s) => (s.kelasSaatIni || '').trim());
+    return firstWithSantri?.kelasSaatIni || settings.namaKelas || '7 MTS PUTRA';
+  });
+
+  // Filtered santri list for template export
+  const filteredSantriList = useMemo(() => {
+    if (!selectedClass || selectedClass === 'all' || selectedClass === 'Semua Kelas') {
+      return santriList;
+    }
+    return santriList.filter(
+      (s) => (s.kelasSaatIni || '').trim().toLowerCase() === selectedClass.trim().toLowerCase()
+    );
+  }, [santriList, selectedClass]);
 
   // Handle Excel Import for Santri (supports standard & Screenshot 89 green-header format)
   const handleSantriFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -459,6 +527,87 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         </div>
       )}
 
+      {/* Pilihan Kelas untuk Unduh Template */}
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5 text-slate-700">
+              <GraduationCap className="w-4 h-4 text-emerald-600" />
+              <label className="text-xs font-black uppercase tracking-wide">
+                Pilih Kelas untuk Template:
+              </label>
+            </div>
+
+            <div className="relative">
+              <select
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className="px-3.5 py-2 pr-8 rounded-xl text-xs font-black border-2 border-emerald-300 bg-emerald-50/80 text-emerald-950 focus:ring-2 focus:ring-emerald-600 cursor-pointer shadow-xs transition-all"
+              >
+                <option value="Semua Kelas">Semua Kelas (Total {santriList.length} Santri)</option>
+                <optgroup label="Daftar Kelas:">
+                  {availableClasses.map((cls) => {
+                    const count = studentCountPerClass[cls] || 0;
+                    return (
+                      <option key={cls} value={cls}>
+                        {cls} — ({count} Santri{count > 0 ? ' ✓' : ''})
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              </select>
+            </div>
+
+            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-slate-500" />
+              <span>
+                {filteredSantriList.length} Santri{' '}
+                {selectedClass !== 'Semua Kelas' ? `di ${selectedClass}` : 'Total'}
+              </span>
+            </span>
+          </div>
+
+          <span className="text-xs text-slate-500 font-medium">
+            Template akan otomatis memuat nama & NIS santri kelas terpilih.
+          </span>
+        </div>
+
+        {/* Quick Class Pills */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+          <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+            <School className="w-3 h-3 text-slate-400" />
+            Pilih Cepat:
+          </span>
+          {availableClasses
+            .filter((cls) => (studentCountPerClass[cls] || 0) > 0)
+            .map((cls) => {
+              const count = studentCountPerClass[cls] || 0;
+              const isSelected = selectedClass === cls;
+              return (
+                <button
+                  key={cls}
+                  type="button"
+                  onClick={() => setSelectedClass(cls)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-emerald-700 text-white shadow-xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <span>{cls}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+        </div>
+      </div>
+
       {/* 2 Big Cards: Identitas & Nilai */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Card 1: Identitas Santri (Matching Screenshot 89) */}
@@ -494,11 +643,11 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           <div className="space-y-3 pt-4 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => exportSantriTemplate(santriList, settings.namaKelas)}
+              onClick={() => exportSantriTemplate(filteredSantriList, selectedClass)}
               className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all"
             >
               <Download className="w-4 h-4" />
-              Download Template Data Santri (.xlsx)
+              Download Template Data Santri ({selectedClass}) (.xlsx)
             </button>
 
             <label className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all border border-slate-200">
@@ -547,11 +696,11 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           <div className="space-y-3 pt-4 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => exportNilaiTemplate(mapelList, santriList, nilaiMap, settings.namaKelas)}
+              onClick={() => exportNilaiTemplate(mapelList, filteredSantriList, nilaiMap, selectedClass)}
               className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all"
             >
               <Download className="w-4 h-4" />
-              Download Template Nilai (.xlsx)
+              Download Template Nilai ({selectedClass}) (.xlsx)
             </button>
 
             <label className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all border border-slate-200">

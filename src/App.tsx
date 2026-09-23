@@ -381,6 +381,31 @@ export default function App() {
         }));
       }
     }
+    handleRefreshData();
+  };
+
+  const handleRefreshData = async () => {
+    try {
+      const res = await fetch('/api/sync-all');
+      if (res.ok) {
+        const data = await res.json();
+        if (data) {
+          if (Array.isArray(data.santriList)) {
+            setSantriList(data.santriList);
+            localStorage.setItem('alhikmah_santri', JSON.stringify(data.santriList));
+          }
+          if (data.nilaiMap && typeof data.nilaiMap === 'object') {
+            setNilaiMap(data.nilaiMap);
+            localStorage.setItem('alhikmah_nilai_map', JSON.stringify(data.nilaiMap));
+          }
+          if (data.settings && typeof data.settings === 'object') {
+            setSettings((prev) => ({ ...prev, ...data.settings }));
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Data refresh error:', e);
+    }
   };
 
   const handleLogout = () => {
@@ -827,6 +852,7 @@ export default function App() {
             currentUser={currentUser}
             onSaveNilai={handleSaveNilai}
             onBatchSaveNilai={handleBatchSaveNilai}
+            onRefreshData={handleRefreshData}
           />
         )}
 

@@ -8,6 +8,12 @@ import {
   AppUser,
 } from '../types';
 import { calculateScoreLetter, calculateSantriRerata, terbilangAngka } from '../utils/helpers';
+import { KELAS_OPTIONS } from '../data/defaultData';
+import {
+  exportSantriTemplate,
+  exportNilaiTemplate,
+} from '../utils/excelTemplates';
+import * as XLSX from 'xlsx';
 import {
   Save,
   Plus,
@@ -26,6 +32,13 @@ import {
   Search,
   School,
   Check,
+  GraduationCap,
+  RefreshCw,
+  Users,
+  ArrowRight,
+  Download,
+  Upload,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface InputNilaiViewProps {
@@ -36,6 +49,7 @@ interface InputNilaiViewProps {
   currentUser?: AppUser;
   onSaveNilai: (nilai: NilaiSantri) => void;
   onBatchSaveNilai?: (updatedMap: Record<string, NilaiSantri>) => void;
+  onRefreshData?: () => Promise<void> | void;
 }
 
 export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
@@ -46,8 +60,82 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
   currentUser,
   onSaveNilai,
   onBatchSaveNilai,
+  onRefreshData,
 }) => {
   const isGuru = currentUser?.role === 'guru';
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Available classes computed dynamically from santriList, settings, and standard list
+  const availableClasses = useMemo(() => {
+    const fromSantri = Array.from(
+      new Set(
+        santriList
+          .map((s) => (s.kelasSaatIni || '').trim())
+          .filter(Boolean)
+      )
+    );
+
+    const combined = Array.from(
+      new Set([
+        ...fromSantri,
+        settings.namaKelas,
+        ...KELAS_OPTIONS,
+      ])
+    ).filter(Boolean);
+
+    // Sort: classes that have students come first
+    return combined.sort((a, b) => {
+      const countA = santriList.filter(
+        (s) => (s.kelasSaatIni || '').trim().toLowerCase() === a.toLowerCase()
+      ).length;
+      const countB = santriList.filter(
+        (s) => (s.kelasSaatIni || '').trim().toLowerCase() === b.toLowerCase()
+      ).length;
+      if (countA > 0 && countB === 0) return -1;
+      if (countB > 0 && countA === 0) return 1;
+      return a.localeCompare(b);
+    });
+  }, [santriList, settings.namaKelas]);
+
+  // Santri count per class
+  const studentCountPerClass = useMemo(() => {
+    const counts: Record<string, number> = {};
+    santriList.forEach((s) => {
+      const k = (s.kelasSaatIni || settings.namaKelas || '').trim();
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    return counts;
+  }, [santriList, settings.namaKelas]);
+
+  // Selected Class State (Allows Guru to switch between classes they teach)
+  const [selectedClass, setSelectedClass] = useState<string>(() => {
+    if (currentUser?.role === 'walikelas' && (currentUser.kelasAkses || currentUser.assignedClass)) {
+      return (currentUser.kelasAkses || currentUser.assignedClass || settings.namaKelas).trim();
+    }
+    // For guru, find the first class that actually has santri
+    const firstWithSantri = santriList.find((s) => (s.kelasSaatIni || '').trim());
+    if (firstWithSantri?.kelasSaatIni) {
+      return firstWithSantri.kelasSaatIni.trim();
+    }
+    return settings.namaKelas || '7 MTS PUTRA';
+  });
+
+  // Filtered santri list based on selectedClass
+  const displayedSantriList = useMemo(() => {
+    let list = santriList;
+    if (selectedClass && selectedClass !== 'all' && selectedClass !== 'Semua Kelas') {
+      list = santriList.filter(
+        (s) =>
+          (s.kelasSaatIni || '').trim().toLowerCase() === selectedClass.trim().toLowerCase()
+      );
+    }
+    return [...list].sort((a, b) => {
+      const aNo = a.nomorUrutAbsen || 9999;
+      const bNo = b.nomorUrutAbsen || 9999;
+      if (aNo !== bNo) return aNo - bNo;
+      return (a.namaLengkap || '').localeCompare(b.namaLengkap || '');
+    });
+  }, [santriList, selectedClass]);
 
   // Determine subjects assigned to this Guru (or all subjects if Wali Kelas/Admin)
   const assignedMapelList = useMemo(() => {
@@ -79,12 +167,28 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
   // View mode for Guru: 'table' (input all santri at once) or 'single' (per santri card)
   const [guruViewMode, setGuruViewMode] = useState<'table' | 'single'>('table');
 
-  // Single-student state
-  const [selectedSantriId, setSelectedSantriId] = useState<string>(santriList[0]?.id || '');
+  // Single-student state based on displayedSantriList
+  const [selectedSantriId, setSelectedSantriId] = useState<string>(
+    displayedSantriList[0]?.id || ''
+  );
   const [activeTab, setActiveTab] = useState<'akademik' | 'sikap' | 'ekstra' | 'kehadiran'>('akademik');
   const [toastMessage, setToastMessage] = useState<string>('');
 
-  const currentSantri = santriList.find((s) => s.id === selectedSantriId) || santriList[0];
+  // Keep selectedSantriId synced when class changes
+  useEffect(() => {
+    if (displayedSantriList.length > 0) {
+      if (!displayedSantriList.some((s) => s.id === selectedSantriId)) {
+        const nextId = displayedSantriList[0].id;
+        setSelectedSantriId(nextId);
+        setFormNilai(getInitialNilai(nextId));
+      }
+    } else {
+      setSelectedSantriId('');
+    }
+  }, [displayedSantriList]);
+
+  const currentSantri =
+    displayedSantriList.find((s) => s.id === selectedSantriId) || displayedSantriList[0];
 
   // Helper to build default empty NilaiSantri
   const getInitialNilai = (sId: string): NilaiSantri => {
@@ -92,7 +196,7 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
       nilaiMap[sId] || {
         id: `nilai-${sId}-${settings.semester}-${settings.tahunPelajaran}`,
         santriId: sId,
-        kelas: settings.namaKelas,
+        kelas: selectedClass !== 'Semua Kelas' ? selectedClass : settings.namaKelas,
         semester: settings.semester,
         tahunPelajaran: settings.tahunPelajaran,
         akademik: {},
@@ -110,6 +214,22 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
   const [formNilai, setFormNilai] = useState<NilaiSantri>(() =>
     getInitialNilai(currentSantri?.id || '')
   );
+
+  // Sync data handler from Wali Kelas
+  const handleSyncData = async () => {
+    setIsRefreshing(true);
+    try {
+      if (onRefreshData) {
+        await onRefreshData();
+      }
+      setToastMessage('Data santri & nilai berhasil disinkronkan dengan input Wali Kelas!');
+    } catch {
+      setToastMessage('Gagal menyinkronkan data.');
+    } finally {
+      setIsRefreshing(false);
+      setTimeout(() => setToastMessage(''), 3500);
+    }
+  };
 
   // When selected student changes in single mode
   const handleSelectSantri = (id: string) => {
@@ -201,12 +321,12 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
     Record<string, { tulis: number; lisan: number }>
   >({});
 
-  // Populate fast table scores whenever selected mapel or santriList or nilaiMap changes
+  // Populate fast table scores whenever selected mapel or displayedSantriList or nilaiMap changes
   useEffect(() => {
     if (!selectedGuruMapelId) return;
 
     const initialMap: Record<string, { tulis: number; lisan: number }> = {};
-    santriList.forEach((s) => {
+    displayedSantriList.forEach((s) => {
       const existing = nilaiMap[s.id]?.akademik?.[selectedGuruMapelId];
       initialMap[s.id] = {
         tulis: existing?.tulis?.skor ?? 0,
@@ -214,7 +334,7 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
       };
     });
     setTableScores(initialMap);
-  }, [selectedGuruMapelId, santriList, nilaiMap]);
+  }, [selectedGuruMapelId, displayedSantriList, nilaiMap]);
 
   const handleTableScoreChange = (
     sId: string,
@@ -232,13 +352,13 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
   };
 
   const handleSaveAllTable = () => {
-    if (!selectedGuruMapelId) return;
+    if (!selectedGuruMapelId || displayedSantriList.length === 0) return;
     const selectedMapel = mapelList.find((m) => m.id === selectedGuruMapelId);
     const kkm = selectedMapel?.kkm || 40;
 
     const updatedNilaiMap: Record<string, NilaiSantri> = { ...nilaiMap };
 
-    santriList.forEach((s) => {
+    displayedSantriList.forEach((s) => {
       const existing = updatedNilaiMap[s.id] || getInitialNilai(s.id);
       const row = tableScores[s.id] || { tulis: 0, lisan: 0 };
 
@@ -264,15 +384,17 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
       Object.values(updatedNilaiMap).forEach((n) => onSaveNilai(n));
     }
 
+    const classLabel = selectedClass === 'Semua Kelas' ? 'Semua Kelas' : `Kelas ${selectedClass}`;
     setToastMessage(
-      `Berhasil menyimpan nilai mata pelajaran "${selectedMapel?.nama}" untuk seluruh santri!`
+      `Berhasil menyimpan nilai mata pelajaran "${selectedMapel?.nama}" untuk ${displayedSantriList.length} santri (${classLabel})!`
     );
     setTimeout(() => setToastMessage(''), 4000);
   };
 
   const handleQuickFill = (field: 'tulis' | 'lisan') => {
+    const classLabel = selectedClass === 'Semua Kelas' ? 'semua kelas' : `kelas ${selectedClass}`;
     const inputVal = prompt(
-      `Masukkan nilai ${field.toUpperCase()} seragam untuk semua santri (0 - 100):`,
+      `Masukkan nilai ${field.toUpperCase()} seragam untuk ${displayedSantriList.length} santri (${classLabel}) (0 - 100):`,
       '80'
     );
     if (inputVal === null) return;
@@ -280,7 +402,7 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
 
     setTableScores((prev) => {
       const next = { ...prev };
-      santriList.forEach((s) => {
+      displayedSantriList.forEach((s) => {
         next[s.id] = {
           ...(next[s.id] || { tulis: 0, lisan: 0 }),
           [field]: num,
@@ -290,15 +412,22 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
     });
   };
 
-  const currentIndex = santriList.findIndex((s) => s.id === selectedSantriId);
+  const currentIndex = displayedSantriList.findIndex((s) => s.id === selectedSantriId);
   const handlePrev = () => {
     if (currentIndex > 0) {
-      handleSelectSantri(santriList[currentIndex - 1].id);
+      handleSelectSantri(displayedSantriList[currentIndex - 1].id);
     }
   };
   const handleNext = () => {
-    if (currentIndex < santriList.length - 1) {
-      handleSelectSantri(santriList[currentIndex + 1].id);
+    if (currentIndex < displayedSantriList.length - 1) {
+      handleSelectSantri(displayedSantriList[currentIndex + 1].id);
+    }
+  };
+
+  const handleSaveAndNext = () => {
+    handleSaveSingle();
+    if (currentIndex < displayedSantriList.length - 1) {
+      handleSelectSantri(displayedSantriList[currentIndex + 1].id);
     }
   };
 
@@ -308,6 +437,120 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
 
   // Selected mapel object for teacher table
   const currentGuruMapel = assignedMapelList.find((m) => m.id === selectedGuruMapelId);
+
+  // Download official template matching user requests and screenshots
+  const handleDownloadNilaiTemplate = () => {
+    try {
+      const targetMapels = isGuru ? assignedMapelList : mapelList;
+      exportNilaiTemplate(targetMapels, displayedSantriList, nilaiMap, selectedClass);
+      setToastMessage(`✓ Template Nilai (${selectedClass}) berhasil diunduh!`);
+      setTimeout(() => setToastMessage(''), 3500);
+    } catch (err: any) {
+      setToastMessage(`Gagal mengunduh template nilai: ${err.message || err}`);
+      setTimeout(() => setToastMessage(''), 3500);
+    }
+  };
+
+  const handleDownloadSantriTemplate = () => {
+    try {
+      exportSantriTemplate(displayedSantriList, selectedClass);
+      setToastMessage(`✓ Template Data Santri (${selectedClass}) berhasil diunduh!`);
+      setTimeout(() => setToastMessage(''), 3500);
+    } catch (err: any) {
+      setToastMessage(`Gagal mengunduh template data santri: ${err.message || err}`);
+      setTimeout(() => setToastMessage(''), 3500);
+    }
+  };
+
+  // Upload grades directly from filled Excel template
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsName = wb.SheetNames[0];
+        const ws = wb.Sheets[wsName];
+        const rawMatrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+        if (!rawMatrix || rawMatrix.length < 2) {
+          setToastMessage('File Excel kosong atau format tidak sesuai.');
+          setTimeout(() => setToastMessage(''), 3500);
+          return;
+        }
+
+        let updatedCount = 0;
+        const newTableScores = { ...tableScores };
+
+        const row0 = (rawMatrix[0] || []).map((c: any) => String(c || '').trim().toUpperCase());
+        const row1 = (rawMatrix[1] || []).map((c: any) => String(c || '').trim().toUpperCase());
+
+        let targetTulisCol = -1;
+        let targetLisanCol = -1;
+
+        if (selectedGuruMapelId) {
+          const mapelObj = mapelList.find((m) => m.id === selectedGuruMapelId);
+          const mapelName = mapelObj?.nama.toUpperCase() || '';
+
+          for (let c = 3; c < Math.max(row0.length, row1.length); c++) {
+            const h0 = row0[c] || '';
+            const h1 = row1[c] || '';
+
+            if (h0.includes(mapelName) || mapelName.includes(h0) || h0 === mapelName) {
+              if (h1.includes('TULIS') || h1 === 'T') targetTulisCol = c;
+              if (h1.includes('LISAN') || h1 === 'L') targetLisanCol = c;
+            }
+          }
+        }
+
+        if (targetTulisCol === -1) {
+          for (let c = 0; c < row1.length; c++) {
+            if (row1[c].includes('TULIS')) targetTulisCol = c;
+            if (row1[c].includes('LISAN')) targetLisanCol = c;
+          }
+        }
+
+        const startRow = rawMatrix.length >= 3 && (row1.includes('TULIS') || row1.includes('LISAN')) ? 2 : 1;
+
+        for (let r = startRow; r < rawMatrix.length; r++) {
+          const rowData = rawMatrix[r];
+          if (!rowData || rowData.length === 0) continue;
+
+          const namaVal = String(rowData[1] || '').trim();
+          const nisVal = String(rowData[2] || '').trim();
+
+          const target = displayedSantriList.find((s) => {
+            if (nisVal && s.nis && (nisVal.includes(s.nis) || s.nis.includes(nisVal))) return true;
+            if (namaVal && s.namaLengkap.toLowerCase().trim() === namaVal.toLowerCase().trim()) return true;
+            return false;
+          });
+
+          if (target) {
+            const tulisVal = targetTulisCol >= 0 ? Number(rowData[targetTulisCol]) || 0 : 0;
+            const lisanVal = targetLisanCol >= 0 ? Number(rowData[targetLisanCol]) || 0 : 0;
+
+            newTableScores[target.id] = {
+              tulis: Math.min(100, Math.max(0, tulisVal)),
+              lisan: Math.min(100, Math.max(0, lisanVal)),
+            };
+            updatedCount++;
+          }
+        }
+
+        setTableScores(newTableScores);
+        setToastMessage(`✓ Berhasil memuat nilai ${updatedCount} santri dari file Excel! Tekan tombol "Simpan Semua Nilai" untuk menyimpan.`);
+        setTimeout(() => setToastMessage(''), 5500);
+      } catch (err: any) {
+        setToastMessage(`Gagal membaca file Excel: ${err.message || err}`);
+        setTimeout(() => setToastMessage(''), 4000);
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = '';
+  };
 
   // If role is guru and admin hasn't assigned any subjects yet
   if (isGuru && assignedMapelList.length === 0) {
@@ -415,6 +658,173 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
         </div>
       )}
 
+      {/* PILIHAN KELAS & SINKRONISASI DATA SANTRI WALI KELAS */}
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Label & Dropdown */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5 text-slate-700">
+              <GraduationCap className={`w-4 h-4 ${isGuru ? 'text-blue-600' : 'text-emerald-600'}`} />
+              <label className="text-xs font-black uppercase tracking-wide">
+                Pilih Kelas yang Dinilai:
+              </label>
+            </div>
+
+            <div className="relative">
+              <select
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className={`px-3.5 py-2 pr-8 rounded-xl text-xs font-black border-2 cursor-pointer shadow-xs transition-all ${
+                  isGuru
+                    ? 'bg-blue-50/80 border-blue-300 text-blue-950 focus:ring-2 focus:ring-blue-600'
+                    : 'bg-emerald-50/80 border-emerald-300 text-emerald-950 focus:ring-2 focus:ring-emerald-600'
+                }`}
+              >
+                <option value="Semua Kelas">Semua Kelas (Total {santriList.length} Santri)</option>
+                <optgroup label="Daftar Kelas:">
+                  {availableClasses.map((cls) => {
+                    const count = studentCountPerClass[cls] || 0;
+                    return (
+                      <option key={cls} value={cls}>
+                        {cls} — ({count} Santri{count > 0 ? ' ✓' : ''})
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              </select>
+            </div>
+
+            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-slate-500" />
+              <span>
+                {displayedSantriList.length} Santri{' '}
+                {selectedClass !== 'Semua Kelas' ? `di ${selectedClass}` : 'Total'}
+              </span>
+            </span>
+          </div>
+
+          {/* Action Buttons: Template Download, Excel Upload, and Sync */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Download Template Nilai (.xlsx) */}
+            <button
+              type="button"
+              onClick={handleDownloadNilaiTemplate}
+              className={`px-3 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-xs border ${
+                isGuru
+                  ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+              }`}
+              title={`Unduh template Excel format resmi untuk kelas ${selectedClass}`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Template Nilai (.xlsx)</span>
+            </button>
+
+            {/* Download Template Data Santri (.xlsx) */}
+            <button
+              type="button"
+              onClick={handleDownloadSantriTemplate}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-xs border border-slate-200"
+              title={`Unduh template buku induk santri kelas ${selectedClass}`}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-500" />
+              <span>Template Santri (.xlsx)</span>
+            </button>
+
+            {/* Upload Nilai from Excel */}
+            <label
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-xs border border-slate-200"
+              title="Unggah nilai dari file Excel yang sudah diisi"
+            >
+              <Upload className="w-3.5 h-3.5 text-slate-600" />
+              <span>Upload Nilai Excel</span>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleExcelUpload}
+                className="hidden"
+              />
+            </label>
+
+            {/* Sync Button from Wali Kelas */}
+            <button
+              type="button"
+              onClick={handleSyncData}
+              disabled={isRefreshing}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-xs border border-slate-200"
+              title="Perbarui data santri terbaru yang diinput oleh Wali Kelas"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Menyinkronkan...' : 'Sinkron Data Wali Kelas'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Class Pills */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+          <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+            <School className="w-3 h-3 text-slate-400" />
+            Pilih Cepat:
+          </span>
+          {availableClasses
+            .filter((cls) => (studentCountPerClass[cls] || 0) > 0)
+            .map((cls) => {
+              const count = studentCountPerClass[cls] || 0;
+              const isSelected = selectedClass === cls;
+              return (
+                <button
+                  key={cls}
+                  type="button"
+                  onClick={() => setSelectedClass(cls)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? isGuru
+                        ? 'bg-blue-700 text-white shadow-xs'
+                        : 'bg-emerald-700 text-white shadow-xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <span>{cls}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      isSelected
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+          {santriList.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedClass('Semua Kelas')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                selectedClass === 'Semua Kelas'
+                  ? isGuru
+                    ? 'bg-blue-700 text-white shadow-xs'
+                    : 'bg-emerald-700 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <span>Semua Santri</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  selectedClass === 'Semua Kelas'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {santriList.length}
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* GURU MODE 1: TABEL CEPAT KELAS (INPUT SEMUA SANTRI SEKALIGUS) */}
       {isGuru && guruViewMode === 'table' && (
         <div className="space-y-4">
@@ -437,7 +847,7 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
               </select>
               <span className="text-xs text-slate-400 hidden md:inline">•</span>
               <span className="text-xs font-bold text-slate-600">
-                Kelas: <span className="text-emerald-700 uppercase font-black">{settings.namaKelas}</span> ({santriList.length} Santri)
+                Kelas: <span className="text-blue-700 uppercase font-black">{selectedClass}</span> ({displayedSantriList.length} Santri)
               </span>
             </div>
 
@@ -447,7 +857,7 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
                 type="button"
                 onClick={() => handleQuickFill('tulis')}
                 className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1"
-                title="Isi nilai tulis yang sama untuk semua santri"
+                title="Isi nilai tulis yang sama untuk semua santri di kelas ini"
               >
                 <Sparkles className="w-3 h-3 text-blue-600" />
                 Isi Massal Tulis
@@ -456,7 +866,7 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
                 type="button"
                 onClick={() => handleQuickFill('lisan')}
                 className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1"
-                title="Isi nilai lisan yang sama untuk semua santri"
+                title="Isi nilai lisan yang sama untuk semua santri di kelas ini"
               >
                 <Sparkles className="w-3 h-3 text-emerald-600" />
                 Isi Massal Lisan
@@ -500,14 +910,22 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {santriList.length === 0 ? (
+                  {displayedSantriList.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
-                        Belum ada santri terdaftar di kelas ini.
+                        <div className="max-w-md mx-auto space-y-2 py-4">
+                          <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
+                          <p className="font-bold text-slate-700 text-sm">
+                            Belum Ada Data Santri di Kelas "{selectedClass}"
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Data santri yang diinput atau diimpor oleh Wali Kelas {selectedClass} akan otomatis masuk ke sini untuk dinilai.
+                          </p>
+                        </div>
                       </td>
                     </tr>
                   ) : (
-                    santriList.map((s, idx) => {
+                    displayedSantriList.map((s, idx) => {
                       const row = tableScores[s.id] || { tulis: 0, lisan: 0 };
                       const avg = Math.round((row.tulis + row.lisan) / 2);
                       const kkm = currentGuruMapel?.kkm || 40;
@@ -622,91 +1040,146 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
       {/* GURU MODE 2 (LEMBAR PER SANTRI) ATAU MODE DEFAULT WALI KELAS */}
       {(!isGuru || guruViewMode === 'single') && (
         <>
-          {/* Header Selector Card */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ${
-                  isGuru ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'
-                }`}
-              >
-                {currentSantri?.nomorUrutAbsen || 1}
+          {displayedSantriList.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-amber-200 shadow-sm p-8 text-center space-y-4">
+              <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                <AlertCircle className="w-7 h-7" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-black text-slate-900 uppercase">
-                    {currentSantri?.namaLengkap}
-                  </h2>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
-                    NIS: {currentSantri?.nis}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Kelas:{' '}
-                  <span className={`font-bold ${isGuru ? 'text-blue-700' : 'text-emerald-700'}`}>
-                    {settings.namaKelas}
-                  </span>{' '}
-                  • Semester:{' '}
-                  <span className={`font-bold ${isGuru ? 'text-blue-700' : 'text-emerald-700'}`}>
-                    {settings.semester}
-                  </span>{' '}
-                  • TA: {settings.tahunPelajaran}
+                <h3 className="text-base font-black text-slate-900 uppercase">
+                  Belum Ada Data Santri di Kelas {selectedClass}
+                </h3>
+                <p className="text-xs text-slate-600 max-w-md mx-auto mt-1 leading-relaxed">
+                  Data santri yang diinput oleh <strong>Wali Kelas {selectedClass}</strong> (melalui menu Identitas Santri atau Import Excel) akan otomatis muncul di sini untuk dinilai per santri.
                 </p>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Student Dropdown Selector */}
-              <select
-                value={selectedSantriId}
-                onChange={(e) => handleSelectSantri(e.target.value)}
-                className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-emerald-600"
-              >
-                {santriList.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nomorUrutAbsen ? `${s.nomorUrutAbsen}. ` : ''}
-                    {s.namaLengkap} ({s.nis})
-                  </option>
-                ))}
-              </select>
-
-              {/* Prev / Next Santri */}
-              <div className="flex items-center gap-1">
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                {availableClasses
+                  .filter((c) => (studentCountPerClass[c] || 0) > 0)
+                  .map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setSelectedClass(c)}
+                      className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-xs font-bold border border-blue-200 cursor-pointer transition-all"
+                    >
+                      Buka {c} ({studentCountPerClass[c]} Santri)
+                    </button>
+                  ))}
                 <button
                   type="button"
-                  onClick={handlePrev}
-                  disabled={currentIndex <= 0}
-                  className="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
-                  title="Santri Sebelumnya"
+                  onClick={() => setSelectedClass('Semua Kelas')}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 cursor-pointer transition-all"
                 >
-                  <ChevronLeft className="w-4 h-4 text-slate-600" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  disabled={currentIndex >= santriList.length - 1}
-                  className="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
-                  title="Santri Selanjutnya"
-                >
-                  <ChevronRight className="w-4 h-4 text-slate-600" />
+                  Tampilkan Semua Santri ({santriList.length})
                 </button>
               </div>
-
-              {/* Save Button */}
-              <button
-                type="button"
-                onClick={handleSaveSingle}
-                className={`flex items-center gap-2 px-5 py-2.5 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer ${
-                  isGuru
-                    ? 'bg-blue-700 hover:bg-blue-800 shadow-blue-900/10'
-                    : 'bg-emerald-700 hover:bg-emerald-800 shadow-emerald-900/10'
-                }`}
-              >
-                <Save className="w-4 h-4" />
-                Simpan Nilai Santri
-              </button>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Header Selector Card */}
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ${
+                      isGuru ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'
+                    }`}
+                  >
+                    {currentSantri?.nomorUrutAbsen || currentIndex + 1}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-black text-slate-900 uppercase">
+                        {currentSantri?.namaLengkap}
+                      </h2>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
+                        NIS: {currentSantri?.nis || '-'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      Kelas:{' '}
+                      <span className={`font-bold ${isGuru ? 'text-blue-700' : 'text-emerald-700'}`}>
+                        {currentSantri?.kelasSaatIni || selectedClass || settings.namaKelas}
+                      </span>{' '}
+                      • Semester:{' '}
+                      <span className={`font-bold ${isGuru ? 'text-blue-700' : 'text-emerald-700'}`}>
+                        {settings.semester}
+                      </span>{' '}
+                      • TA: {settings.tahunPelajaran}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Student Dropdown Selector */}
+                  <select
+                    value={selectedSantriId}
+                    onChange={(e) => handleSelectSantri(e.target.value)}
+                    className={`px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 ${
+                      isGuru ? 'focus:ring-blue-600' : 'focus:ring-emerald-600'
+                    }`}
+                  >
+                    {displayedSantriList.map((s, idx) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nomorUrutAbsen ? `${s.nomorUrutAbsen}. ` : `${idx + 1}. `}
+                        {s.namaLengkap} ({s.nis || 'No NIS'})
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Prev / Next Santri */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handlePrev}
+                      disabled={currentIndex <= 0}
+                      className="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                      title="Santri Sebelumnya"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-slate-600" />
+                    </button>
+                    <span className="text-[11px] font-bold text-slate-500 px-1 whitespace-nowrap">
+                      {currentIndex + 1} / {displayedSantriList.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      disabled={currentIndex >= displayedSantriList.length - 1}
+                      className="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                      title="Santri Selanjutnya"
+                    >
+                      <ChevronRight className="w-4 h-4 text-slate-600" />
+                    </button>
+                  </div>
+
+                  {/* Save Button */}
+                  <button
+                    type="button"
+                    onClick={handleSaveSingle}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer ${
+                      isGuru
+                        ? 'bg-blue-700 hover:bg-blue-800 shadow-blue-900/10'
+                        : 'bg-emerald-700 hover:bg-emerald-800 shadow-emerald-900/10'
+                    }`}
+                  >
+                    <Save className="w-4 h-4" />
+                    Simpan Nilai
+                  </button>
+
+                  {/* Save & Next Button */}
+                  {currentIndex < displayedSantriList.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={handleSaveAndNext}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-900/10 transition-all cursor-pointer"
+                      title="Simpan nilai santri ini dan langsung buka santri nomor berikutnya"
+                    >
+                      <span>Simpan & Lanjut</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
 
           {/* Tabs Navigation (For Wali Kelas: 4 tabs, For Guru: only Nilai Akademik) */}
           {!isGuru && (
@@ -1125,6 +1598,8 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
                 </div>
               </div>
             </div>
+          )}
+            </>
           )}
         </>
       )}
