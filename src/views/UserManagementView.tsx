@@ -73,22 +73,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modal states
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
-
-  // Form states for Create
-  const [namaLengkap, setNamaLengkap] = useState('');
-  const [nip, setNip] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState<'walikelas' | 'guru' | 'admin'>('walikelas');
-  const [kelasAkses, setKelasAkses] = useState('7 MTS PUTRA');
-  const [customKelas, setCustomKelas] = useState('');
-  const [selectedMapelIds, setSelectedMapelIds] = useState<string[]>([]);
 
   // Feedback states
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedRegLink, setCopiedRegLink] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
   // Categories of mata pelajaran
@@ -96,7 +85,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     return Array.from(new Set(mapelList.map((m) => m.kategori)));
   }, [mapelList]);
 
-  // Quick password generator
+  // Quick password generator for edit modal
   const generateRandomPassword = () => {
     const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
     let res = 'hikmah';
@@ -106,65 +95,12 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     return res;
   };
 
-  const handleOpenCreateModal = (defaultRole: 'walikelas' | 'guru' | 'admin' = 'walikelas') => {
-    setRole(defaultRole);
-    setNamaLengkap('');
-    setNip('');
-    setUsername('');
-    setPassword(generateRandomPassword());
-    setShowPassword(true);
-    setKelasAkses(defaultRole === 'guru' ? 'Semua Kelas' : '7 MTS PUTRA');
-    setCustomKelas('');
-    setSelectedMapelIds([]);
-    setIsCreateModalOpen(true);
-  };
-
-  const handleCreateUser = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (users.some((u) => u.username.toLowerCase() === username.trim().toLowerCase())) {
-      alert('Username tersebut sudah digunakan. Silakan gunakan username lain.');
-      return;
-    }
-
-    if (role === 'guru' && selectedMapelIds.length === 0) {
-      if (!window.confirm('Anda belum mencentang mata pelajaran yang diajar untuk guru ini. Tetap simpan? (Mata pelajaran dapat ditentukan nanti)')) {
-        return;
-      }
-    }
-
-    const assigned = kelasAkses === 'LAINNYA' ? customKelas.trim() : kelasAkses;
-    const mapelNames = mapelList
-      .filter((m) => selectedMapelIds.includes(m.id))
-      .map((m) => m.nama);
-
-    const newUser: AppUser = {
-      id: 'user-' + Date.now(),
-      username: username.trim(),
-      password: password.trim(),
-      fullName: namaLengkap.trim(),
-      namaLengkap: namaLengkap.trim(),
-      nip: nip.trim() || undefined,
-      role: role,
-      assignedClass: role === 'walikelas' ? assigned : role === 'guru' ? assigned : undefined,
-      kelasAkses: role === 'walikelas' ? assigned : role === 'guru' ? assigned : undefined,
-      assignedMapelIds: role === 'guru' ? selectedMapelIds : undefined,
-      mapelAkses: role === 'guru' ? mapelNames : undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    onAddUser(newUser);
-    setIsCreateModalOpen(false);
-    setSuccessMsg(
-      `Akun ${
-        newUser.role === 'walikelas'
-          ? 'Wali Kelas'
-          : newUser.role === 'guru'
-          ? 'Guru Pengajar'
-          : 'Administrator'
-      } "${newUser.namaLengkap}" (Username: ${newUser.username}) berhasil dibuat!`
-    );
-    setTimeout(() => setSuccessMsg(''), 4000);
+  const handleCopyRegistrationLink = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://e-raport-ppma.vercel.app';
+    const regUrl = `${origin}/#daftar-google`;
+    navigator.clipboard.writeText(regUrl);
+    setCopiedRegLink(true);
+    setTimeout(() => setCopiedRegLink(false), 2500);
   };
 
   const handleOpenEditModal = (user: AppUser) => {
@@ -205,7 +141,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     const updatedUser: AppUser = {
       ...editingUser,
       username: editingUser.username.trim(),
-      password: editingUser.password.trim(),
+      password: (editingUser.password || '').trim(),
       fullName: (editingUser.namaLengkap || editingUser.fullName).trim(),
       namaLengkap: (editingUser.namaLengkap || editingUser.fullName).trim(),
       assignedClass:
@@ -336,29 +272,26 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             </span>
           </div>
           <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">
-            Manajemen Akun Guru, Wali Kelas & Akses
+            Manajemen Akun Guru, Wali Kelas & Hak Akses
           </h2>
-          <p className="text-xs text-slate-500 font-medium">
-            Buatkan username & password untuk Guru Pengajar dan Wali Kelas serta tentukan mata pelajaran yang diajarkan.
+          <p className="text-xs text-slate-500 font-medium max-w-xl leading-relaxed">
+            Guru & Wali Kelas mendaftar secara mandiri menggunakan Akun Google masing-masing. Administrator bertugas mengelola, mengubah mata pelajaran yang diampu, serta mengaktifkan wali kelas di raport.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Pendaftaran Mandiri Google Aktif</span>
+          </div>
           <button
             type="button"
-            onClick={() => handleOpenCreateModal('guru')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-900/10 cursor-pointer transition-all shrink-0"
+            onClick={handleCopyRegistrationLink}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs shadow-md shadow-slate-950/20 cursor-pointer transition-all shrink-0"
+            title="Salin link pendaftaran untuk dikirimkan ke guru / wali kelas"
           >
-            <BookOpen className="w-4 h-4" />
-            + Buat Akun Guru & Mapel
-          </button>
-          <button
-            type="button"
-            onClick={() => handleOpenCreateModal('walikelas')}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-900/10 cursor-pointer transition-all shrink-0"
-          >
-            <UserPlus className="w-4 h-4" />
-            + Akun Wali Kelas
+            {copiedRegLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+            <span>{copiedRegLink ? 'Link Tersalin!' : 'Salin Link Pendaftaran Google'}</span>
           </button>
         </div>
       </div>
@@ -567,17 +500,26 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                       {/* Nama & NIP */}
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <div
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-xs ${
-                              u.role === 'admin'
-                                ? 'bg-purple-100 text-purple-800'
-                                : u.role === 'walikelas'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-blue-100 text-blue-800'
-                            }`}
-                          >
-                            {avatarInitial}
-                          </div>
+                          {u.photoUrl ? (
+                            <img
+                              src={u.photoUrl}
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              className="w-9 h-9 rounded-xl object-cover shrink-0 border border-slate-200 shadow-xs"
+                            />
+                          ) : (
+                            <div
+                              className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-xs ${
+                                u.role === 'admin'
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : u.role === 'walikelas'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}
+                            >
+                              {avatarInitial}
+                            </div>
+                          )}
                           <div>
                             <div className="font-bold text-slate-900 flex items-center gap-1.5">
                               <span>{displayName}</span>
@@ -594,37 +536,58 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                         </div>
                       </td>
 
-                      {/* Username & Password */}
+                      {/* Username & Password / Google Info */}
                       <td className="p-4">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] uppercase font-bold text-slate-400">
-                              User:
-                            </span>
-                            <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-                              {u.username}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] uppercase font-bold text-slate-400">
-                              Pass:
-                            </span>
-                            <span className="font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-100">
-                              {u.password}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyCredentials(u)}
-                              className="p-1 hover:bg-slate-200 text-slate-500 rounded transition-colors cursor-pointer"
-                              title="Salin Kredensial untuk WhatsApp"
-                            >
-                              {copiedId === u.id ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
+                          {u.authProvider === 'google' || u.email ? (
+                            <div>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-50 text-blue-800 border border-blue-200">
+                                  <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24">
+                                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                                  </svg>
+                                  Akun Google
+                                </span>
+                              </div>
+                              <div className="font-mono text-[11px] font-bold text-slate-800 break-all">
+                                {u.email || u.username}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] uppercase font-bold text-slate-400">
+                                  User:
+                                </span>
+                                <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                                  {u.username}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] uppercase font-bold text-slate-400">
+                                  Pass:
+                                </span>
+                                <span className="font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-100">
+                                  {u.password}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyCredentials(u)}
+                                  className="p-1 hover:bg-slate-200 text-slate-500 rounded transition-colors cursor-pointer"
+                                  title="Salin Kredensial untuk WhatsApp"
+                                >
+                                  {copiedId === u.id ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </td>
 
@@ -768,305 +731,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         </div>
       </div>
 
-      {/* MODAL 1: BUAT AKUN BARU OLEH ADMIN */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
-            <div className="p-5 bg-linear-to-r from-slate-900 to-slate-800 text-white flex justify-between items-center shrink-0">
-              <div>
-                <h3 className="font-bold text-sm uppercase tracking-wide flex items-center gap-2">
-                  <UserPlus className="w-4 h-4 text-emerald-400" />
-                  Buat Akun Guru Pengajar / Wali Kelas Baru
-                </h3>
-                <p className="text-[11px] text-slate-300">
-                  Dikelola langsung oleh Administrator Pondok Pesantren
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsCreateModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
-              {/* Role Selection */}
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1.5">
-                  1. Pilih Peran Pengguna (Role)
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRole('guru');
-                      setKelasAkses('Semua Kelas');
-                    }}
-                    className={`py-2 px-3 rounded-xl font-bold text-center border cursor-pointer transition-all ${
-                      role === 'guru'
-                        ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    Guru Pengajar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRole('walikelas');
-                      setKelasAkses('7 MTS PUTRA');
-                    }}
-                    className={`py-2 px-3 rounded-xl font-bold text-center border cursor-pointer transition-all ${
-                      role === 'walikelas'
-                        ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    Wali Kelas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('admin')}
-                    className={`py-2 px-3 rounded-xl font-bold text-center border cursor-pointer transition-all ${
-                      role === 'admin'
-                        ? 'bg-purple-700 text-white border-purple-700 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    Administrator
-                  </button>
-                </div>
-              </div>
-
-              {/* Nama Lengkap & NIP */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    2. Nama Lengkap & Gelar
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={namaLengkap}
-                    onChange={(e) => setNamaLengkap(e.target.value)}
-                    placeholder={
-                      role === 'guru'
-                        ? 'e.g. Ustadz Abdullah, S.Pd.I.'
-                        : 'e.g. Ustadz Ahmad, M.Pd.'
-                    }
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    NIP / No. Induk
-                  </label>
-                  <input
-                    type="text"
-                    value={nip}
-                    onChange={(e) => setNip(e.target.value)}
-                    placeholder="e.g. 198203..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* KHUSUS GURU: Tentukan Mata Pelajaran yang Diajarkan */}
-              {role === 'guru' && (
-                <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <label className="block font-bold text-blue-950 uppercase text-[11px] flex items-center gap-1.5">
-                      <BookOpen className="w-3.5 h-3.5 text-blue-700" />
-                      3. Tentukan Mata Pelajaran yang Diajar oleh Guru Ini:
-                    </label>
-                    <span className="text-[10px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full">
-                      {selectedMapelIds.length} Mapel Dipilih
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-blue-800">
-                    Guru ini nantinya hanya dapat menginput nilai untuk mata pelajaran yang dicentang oleh Admin di bawah ini:
-                  </p>
-
-                  {/* List of Subjects by Category */}
-                  <div className="max-h-48 overflow-y-auto space-y-2.5 bg-white p-3 rounded-xl border border-blue-200">
-                    {categories.map((cat) => {
-                      const catMapels = mapelList.filter((m) => m.kategori === cat);
-                      const allCatSelected = catMapels.every((m) =>
-                        selectedMapelIds.includes(m.id)
-                      );
-                      return (
-                        <div key={cat} className="space-y-1">
-                          <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
-                            <span>{cat}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (allCatSelected) {
-                                  setSelectedMapelIds((prev) =>
-                                    prev.filter((id) => !catMapels.some((m) => m.id === id))
-                                  );
-                                } else {
-                                  setSelectedMapelIds((prev) =>
-                                    Array.from(new Set([...prev, ...catMapels.map((m) => m.id)]))
-                                  );
-                                }
-                              }}
-                              className="text-[10px] text-blue-700 hover:text-blue-900 font-bold underline cursor-pointer"
-                            >
-                              {allCatSelected ? 'Batal Semua' : 'Pilih Semua'}
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 pl-1">
-                            {catMapels.map((m) => {
-                              const isChecked = selectedMapelIds.includes(m.id);
-                              return (
-                                <label
-                                  key={m.id}
-                                  className={`flex items-center gap-2 p-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
-                                    isChecked
-                                      ? 'bg-blue-50 border-blue-400 text-blue-950 font-bold'
-                                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setSelectedMapelIds((prev) => [...prev, m.id]);
-                                      } else {
-                                        setSelectedMapelIds((prev) =>
-                                          prev.filter((id) => id !== m.id)
-                                        );
-                                      }
-                                    }}
-                                    className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
-                                  />
-                                  <span className="truncate">{m.nama}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Kelas Binaan (Jika Wali Kelas) */}
-              {role === 'walikelas' && (
-                <div className="p-3.5 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-2">
-                  <label className="block font-bold text-emerald-900 uppercase">
-                    3. Tetapkan Kelas Binaan Wali Kelas
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      value={kelasAkses}
-                      onChange={(e) => setKelasAkses(e.target.value)}
-                      className="px-3 py-2 bg-white border border-emerald-300 rounded-xl font-bold text-slate-800"
-                    >
-                      {KELAS_OPTIONS.map((k) => (
-                        <option key={k} value={k}>
-                          {k}
-                        </option>
-                      ))}
-                      <option value="LAINNYA">+ Ketik Kelas Lain...</option>
-                    </select>
-
-                    {kelasAkses === 'LAINNYA' ? (
-                      <input
-                        type="text"
-                        required
-                        value={customKelas}
-                        onChange={(e) => setCustomKelas(e.target.value)}
-                        placeholder="Ketik nama kelas..."
-                        className="px-3 py-2 bg-white border border-emerald-300 rounded-xl font-bold text-slate-800 uppercase"
-                      />
-                    ) : (
-                      <div className="flex items-center text-[11px] text-emerald-800 font-medium px-2">
-                        Wali kelas akan mengelola kelas ini
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Username & Password */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t">
-                <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    4. Buatkan Username
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder={role === 'guru' ? 'e.g. gurunahwu' : 'e.g. walikelas7a'}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-slate-700 uppercase">
-                      5. Buatkan Password
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setPassword(generateRandomPassword())}
-                      className="text-[10px] text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <Sparkles className="w-3 h-3" /> Acak
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Masukkan kata sandi"
-                      className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit Buttons */}
-              <div className="pt-4 border-t flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" />
-                  Simpan & Buat Akun
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: EDIT AKUN & UBAH MATA PELAJARAN / PASSWORD */}
+      {/* MODAL EDIT AKUN & UBAH MATA PELAJARAN / PASSWORD */}
       {editingUser && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">

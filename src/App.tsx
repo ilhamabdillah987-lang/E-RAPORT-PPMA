@@ -591,7 +591,15 @@ export default function App() {
 
   // If not logged in, show Login Screen
   if (!currentUser) {
-    return <LoginView users={users} settings={settings} onLogin={handleLogin} />;
+    return (
+      <LoginView
+        users={users}
+        settings={settings}
+        mapelList={mapelList}
+        onLogin={handleLogin}
+        onRegisterUser={handleAddUser}
+      />
+    );
   }
 
   // Navigation Items:

@@ -3,10 +3,14 @@ export type UserRole = 'admin' | 'walikelas' | 'guru';
 export interface AppUser {
   id: string;
   username: string;
-  password: string;
+  password?: string;
   fullName: string;
   namaLengkap?: string;
   role: UserRole;
+  email?: string;
+  photoUrl?: string;
+  authProvider?: 'google' | 'local';
+  googleUid?: string;
   assignedClass?: string;
   kelasAkses?: string;
   assignedMapelIds?: string[];
