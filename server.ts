@@ -77,6 +77,12 @@ interface ServerStore {
   santriList: any[];
   nilaiMap: Record<string, any>;
   lastUpdated: string;
+  lastPushedToGuru?: {
+    timestamp: string;
+    namaKelas: string;
+    pushedBy: string;
+    count: number;
+  };
 }
 
 function loadStore(): ServerStore {
@@ -284,6 +290,38 @@ app.post('/api/santri', (req, res) => {
   }
 });
 
+// Dedicated Endpoint: Push Data Santri ke Akun Guru
+app.post('/api/santri/push-to-guru', (req, res) => {
+  try {
+    const { santriList, namaKelas, pushedBy } = req.body || {};
+    if (Array.isArray(santriList)) {
+      currentStore.santriList = santriList;
+    }
+    currentStore.lastPushedToGuru = {
+      timestamp: new Date().toISOString(),
+      namaKelas: String(namaKelas || currentStore.settings?.namaKelas || 'Semua Kelas').trim(),
+      pushedBy: String(pushedBy || 'Wali Kelas').trim(),
+      count: (currentStore.santriList || []).length,
+    };
+    saveStore(currentStore);
+    res.json({
+      success: true,
+      message: `Berhasil mengirim ${currentStore.santriList.length} data santri ke akun guru.`,
+      lastPushedToGuru: currentStore.lastPushedToGuru,
+      count: currentStore.santriList.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/santri/push-status', (req, res) => {
+  res.json({
+    lastPushedToGuru: currentStore.lastPushedToGuru || null,
+    totalSantri: (currentStore.santriList || []).length,
+  });
+});
+
 // 7. Nilai
 app.get('/api/nilai', (req, res) => {
   res.json(currentStore.nilaiMap || {});
@@ -309,6 +347,7 @@ app.get('/api/sync-all', (req, res) => {
     santriList: currentStore.santriList,
     nilaiMap: currentStore.nilaiMap,
     lastUpdated: currentStore.lastUpdated,
+    lastPushedToGuru: currentStore.lastPushedToGuru || null,
   });
 });
 

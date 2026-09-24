@@ -153,20 +153,6 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
     );
   }, [isGuru, currentUser, mapelList]);
 
-  // Selected subject for Guru fast table mode
-  const [selectedGuruMapelId, setSelectedGuruMapelId] = useState<string>(
-    assignedMapelList[0]?.id || ''
-  );
-
-  useEffect(() => {
-    if (assignedMapelList.length > 0 && !assignedMapelList.some((m) => m.id === selectedGuruMapelId)) {
-      setSelectedGuruMapelId(assignedMapelList[0].id);
-    }
-  }, [assignedMapelList, selectedGuruMapelId]);
-
-  // View mode for Guru: 'table' (input all santri at once) or 'single' (per santri card)
-  const [guruViewMode, setGuruViewMode] = useState<'table' | 'single'>('table');
-
   // Single-student state based on displayedSantriList
   const [selectedSantriId, setSelectedSantriId] = useState<string>(
     displayedSantriList[0]?.id || ''
@@ -316,102 +302,6 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
     setTimeout(() => setToastMessage(''), 3500);
   };
 
-  // Fast table mode state for Guru (stores changes per santri for selected subject)
-  const [tableScores, setTableScores] = useState<
-    Record<string, { tulis: number; lisan: number }>
-  >({});
-
-  // Populate fast table scores whenever selected mapel or displayedSantriList or nilaiMap changes
-  useEffect(() => {
-    if (!selectedGuruMapelId) return;
-
-    const initialMap: Record<string, { tulis: number; lisan: number }> = {};
-    displayedSantriList.forEach((s) => {
-      const existing = nilaiMap[s.id]?.akademik?.[selectedGuruMapelId];
-      initialMap[s.id] = {
-        tulis: existing?.tulis?.skor ?? 0,
-        lisan: existing?.lisan?.skor ?? 0,
-      };
-    });
-    setTableScores(initialMap);
-  }, [selectedGuruMapelId, displayedSantriList, nilaiMap]);
-
-  const handleTableScoreChange = (
-    sId: string,
-    field: 'tulis' | 'lisan',
-    val: string
-  ) => {
-    const num = Math.min(100, Math.max(0, Number(val) || 0));
-    setTableScores((prev) => ({
-      ...prev,
-      [sId]: {
-        ...(prev[sId] || { tulis: 0, lisan: 0 }),
-        [field]: num,
-      },
-    }));
-  };
-
-  const handleSaveAllTable = () => {
-    if (!selectedGuruMapelId || displayedSantriList.length === 0) return;
-    const selectedMapel = mapelList.find((m) => m.id === selectedGuruMapelId);
-    const kkm = selectedMapel?.kkm || 40;
-
-    const updatedNilaiMap: Record<string, NilaiSantri> = { ...nilaiMap };
-
-    displayedSantriList.forEach((s) => {
-      const existing = updatedNilaiMap[s.id] || getInitialNilai(s.id);
-      const row = tableScores[s.id] || { tulis: 0, lisan: 0 };
-
-      const tulisLetter = calculateScoreLetter(row.tulis, kkm);
-      const lisanLetter = calculateScoreLetter(row.lisan, kkm);
-
-      updatedNilaiMap[s.id] = {
-        ...existing,
-        akademik: {
-          ...existing.akademik,
-          [selectedGuruMapelId]: {
-            tulis: { skor: row.tulis, huruf: tulisLetter },
-            lisan: { skor: row.lisan, huruf: lisanLetter },
-          },
-        },
-        updatedAt: new Date().toISOString(),
-      };
-    });
-
-    if (onBatchSaveNilai) {
-      onBatchSaveNilai(updatedNilaiMap);
-    } else {
-      Object.values(updatedNilaiMap).forEach((n) => onSaveNilai(n));
-    }
-
-    const classLabel = selectedClass === 'Semua Kelas' ? 'Semua Kelas' : `Kelas ${selectedClass}`;
-    setToastMessage(
-      `Berhasil menyimpan nilai mata pelajaran "${selectedMapel?.nama}" untuk ${displayedSantriList.length} santri (${classLabel})!`
-    );
-    setTimeout(() => setToastMessage(''), 4000);
-  };
-
-  const handleQuickFill = (field: 'tulis' | 'lisan') => {
-    const classLabel = selectedClass === 'Semua Kelas' ? 'semua kelas' : `kelas ${selectedClass}`;
-    const inputVal = prompt(
-      `Masukkan nilai ${field.toUpperCase()} seragam untuk ${displayedSantriList.length} santri (${classLabel}) (0 - 100):`,
-      '80'
-    );
-    if (inputVal === null) return;
-    const num = Math.min(100, Math.max(0, Number(inputVal) || 0));
-
-    setTableScores((prev) => {
-      const next = { ...prev };
-      displayedSantriList.forEach((s) => {
-        next[s.id] = {
-          ...(next[s.id] || { tulis: 0, lisan: 0 }),
-          [field]: num,
-        };
-      });
-      return next;
-    });
-  };
-
   const currentIndex = displayedSantriList.findIndex((s) => s.id === selectedSantriId);
   const handlePrev = () => {
     if (currentIndex > 0) {
@@ -435,9 +325,6 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
   const categories = Array.from(new Set(activeSubjects.map((m) => m.kategori)));
   const rerata = calculateSantriRerata(formNilai, activeSubjects);
 
-  // Selected mapel object for teacher table
-  const currentGuruMapel = assignedMapelList.find((m) => m.id === selectedGuruMapelId);
-
   // Download official template matching user requests and screenshots
   const handleDownloadNilaiTemplate = () => {
     try {
@@ -460,96 +347,6 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
       setToastMessage(`Gagal mengunduh template data santri: ${err.message || err}`);
       setTimeout(() => setToastMessage(''), 3500);
     }
-  };
-
-  // Upload grades directly from filled Excel template
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsName = wb.SheetNames[0];
-        const ws = wb.Sheets[wsName];
-        const rawMatrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-
-        if (!rawMatrix || rawMatrix.length < 2) {
-          setToastMessage('File Excel kosong atau format tidak sesuai.');
-          setTimeout(() => setToastMessage(''), 3500);
-          return;
-        }
-
-        let updatedCount = 0;
-        const newTableScores = { ...tableScores };
-
-        const row0 = (rawMatrix[0] || []).map((c: any) => String(c || '').trim().toUpperCase());
-        const row1 = (rawMatrix[1] || []).map((c: any) => String(c || '').trim().toUpperCase());
-
-        let targetTulisCol = -1;
-        let targetLisanCol = -1;
-
-        if (selectedGuruMapelId) {
-          const mapelObj = mapelList.find((m) => m.id === selectedGuruMapelId);
-          const mapelName = mapelObj?.nama.toUpperCase() || '';
-
-          for (let c = 3; c < Math.max(row0.length, row1.length); c++) {
-            const h0 = row0[c] || '';
-            const h1 = row1[c] || '';
-
-            if (h0.includes(mapelName) || mapelName.includes(h0) || h0 === mapelName) {
-              if (h1.includes('TULIS') || h1 === 'T') targetTulisCol = c;
-              if (h1.includes('LISAN') || h1 === 'L') targetLisanCol = c;
-            }
-          }
-        }
-
-        if (targetTulisCol === -1) {
-          for (let c = 0; c < row1.length; c++) {
-            if (row1[c].includes('TULIS')) targetTulisCol = c;
-            if (row1[c].includes('LISAN')) targetLisanCol = c;
-          }
-        }
-
-        const startRow = rawMatrix.length >= 3 && (row1.includes('TULIS') || row1.includes('LISAN')) ? 2 : 1;
-
-        for (let r = startRow; r < rawMatrix.length; r++) {
-          const rowData = rawMatrix[r];
-          if (!rowData || rowData.length === 0) continue;
-
-          const namaVal = String(rowData[1] || '').trim();
-          const nisVal = String(rowData[2] || '').trim();
-
-          const target = displayedSantriList.find((s) => {
-            if (nisVal && s.nis && (nisVal.includes(s.nis) || s.nis.includes(nisVal))) return true;
-            if (namaVal && s.namaLengkap.toLowerCase().trim() === namaVal.toLowerCase().trim()) return true;
-            return false;
-          });
-
-          if (target) {
-            const tulisVal = targetTulisCol >= 0 ? Number(rowData[targetTulisCol]) || 0 : 0;
-            const lisanVal = targetLisanCol >= 0 ? Number(rowData[targetLisanCol]) || 0 : 0;
-
-            newTableScores[target.id] = {
-              tulis: Math.min(100, Math.max(0, tulisVal)),
-              lisan: Math.min(100, Math.max(0, lisanVal)),
-            };
-            updatedCount++;
-          }
-        }
-
-        setTableScores(newTableScores);
-        setToastMessage(`✓ Berhasil memuat nilai ${updatedCount} santri dari file Excel! Tekan tombol "Simpan Semua Nilai" untuk menyimpan.`);
-        setTimeout(() => setToastMessage(''), 5500);
-      } catch (err: any) {
-        setToastMessage(`Gagal membaca file Excel: ${err.message || err}`);
-        setTimeout(() => setToastMessage(''), 4000);
-      }
-    };
-    reader.readAsBinaryString(file);
-    e.target.value = '';
   };
 
   // If role is guru and admin hasn't assigned any subjects yet
@@ -627,34 +424,6 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
               ))}
             </div>
           </div>
-
-          {/* View Mode Switcher for Guru */}
-          <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl shrink-0">
-            <button
-              type="button"
-              onClick={() => setGuruViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-xs cursor-pointer transition-all ${
-                guruViewMode === 'table'
-                  ? 'bg-blue-700 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <Table className="w-3.5 h-3.5" />
-              <span>Tabel Cepat Kelas</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setGuruViewMode('single')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-xs cursor-pointer transition-all ${
-                guruViewMode === 'single'
-                  ? 'bg-blue-700 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Lembar Per Santri</span>
-            </button>
-          </div>
         </div>
       )}
 
@@ -730,21 +499,6 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
               <FileSpreadsheet className="w-3.5 h-3.5 text-slate-500" />
               <span>Template Santri (.xlsx)</span>
             </button>
-
-            {/* Upload Nilai from Excel */}
-            <label
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-xs border border-slate-200"
-              title="Unggah nilai dari file Excel yang sudah diisi"
-            >
-              <Upload className="w-3.5 h-3.5 text-slate-600" />
-              <span>Upload Nilai Excel</span>
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleExcelUpload}
-                className="hidden"
-              />
-            </label>
 
             {/* Sync Button from Wali Kelas */}
             <button
@@ -825,222 +579,8 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
         </div>
       </div>
 
-      {/* GURU MODE 1: TABEL CEPAT KELAS (INPUT SEMUA SANTRI SEKALIGUS) */}
-      {isGuru && guruViewMode === 'table' && (
-        <div className="space-y-4">
-          {/* Subject Selector & Quick Actions Toolbar */}
-          <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="text-xs font-bold text-slate-700 uppercase">
-                Pilih Mata Pelajaran:
-              </label>
-              <select
-                value={selectedGuruMapelId}
-                onChange={(e) => setSelectedGuruMapelId(e.target.value)}
-                className="px-3.5 py-2 bg-blue-50 border border-blue-300 rounded-xl text-xs font-black text-blue-900 focus:ring-2 focus:ring-blue-600 cursor-pointer"
-              >
-                {assignedMapelList.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nama} (KKM: {m.kkm}) — {m.kategori}
-                  </option>
-                ))}
-              </select>
-              <span className="text-xs text-slate-400 hidden md:inline">•</span>
-              <span className="text-xs font-bold text-slate-600">
-                Kelas: <span className="text-blue-700 uppercase font-black">{selectedClass}</span> ({displayedSantriList.length} Santri)
-              </span>
-            </div>
-
-            {/* Quick Bulk Tools & Save All */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickFill('tulis')}
-                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1"
-                title="Isi nilai tulis yang sama untuk semua santri di kelas ini"
-              >
-                <Sparkles className="w-3 h-3 text-blue-600" />
-                Isi Massal Tulis
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickFill('lisan')}
-                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1"
-                title="Isi nilai lisan yang sama untuk semua santri di kelas ini"
-              >
-                <Sparkles className="w-3 h-3 text-emerald-600" />
-                Isi Massal Lisan
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveAllTable}
-                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-black rounded-xl text-xs shadow-md shadow-blue-900/10 cursor-pointer transition-all flex items-center gap-1.5 active:scale-[0.99]"
-              >
-                <Save className="w-4 h-4" />
-                Simpan Semua Nilai ({currentGuruMapel?.nama || 'Mapel'})
-              </button>
-            </div>
-          </div>
-
-          {/* Table of Students for this Subject */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
-                    <th className="p-3.5 w-12 text-center">No</th>
-                    <th className="p-3.5 w-16 text-center">Absen</th>
-                    <th className="p-3.5 w-28">NIS</th>
-                    <th className="p-3.5">Nama Lengkap Santri</th>
-                    <th className="p-3.5 w-32 text-center">
-                      Nilai Tulis (0-100)
-                    </th>
-                    <th className="p-3.5 w-32 text-center">
-                      Nilai Lisan (0-100)
-                    </th>
-                    <th className="p-3.5 w-28 text-center">
-                      Nilai Akhir
-                    </th>
-                    <th className="p-3.5 w-24 text-center">
-                      Predikat
-                    </th>
-                    <th className="p-3.5 w-28 text-center">
-                      Status KKM
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {displayedSantriList.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
-                        <div className="max-w-md mx-auto space-y-2 py-4">
-                          <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
-                          <p className="font-bold text-slate-700 text-sm">
-                            Belum Ada Data Santri di Kelas "{selectedClass}"
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            Data santri yang diinput atau diimpor oleh Wali Kelas {selectedClass} akan otomatis masuk ke sini untuk dinilai.
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    displayedSantriList.map((s, idx) => {
-                      const row = tableScores[s.id] || { tulis: 0, lisan: 0 };
-                      const avg = Math.round((row.tulis + row.lisan) / 2);
-                      const kkm = currentGuruMapel?.kkm || 40;
-                      const letter = calculateScoreLetter(avg, kkm);
-                      const isTuntas = avg >= kkm;
-
-                      return (
-                        <tr key={s.id} className="hover:bg-blue-50/40 transition-colors">
-                          <td className="p-3.5 text-center font-bold text-slate-400">
-                            {idx + 1}
-                          </td>
-                          <td className="p-3.5 text-center font-extrabold text-slate-700">
-                            {s.nomorUrutAbsen || idx + 1}
-                          </td>
-                          <td className="p-3.5 font-mono text-slate-500 font-bold">
-                            {s.nis}
-                          </td>
-                          <td className="p-3.5">
-                            <span className="font-bold text-slate-900 text-xs">
-                              {s.namaLengkap}
-                            </span>
-                          </td>
-                          <td className="p-2.5 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={row.tulis || ''}
-                              placeholder="0"
-                              onChange={(e) =>
-                                handleTableScoreChange(s.id, 'tulis', e.target.value)
-                              }
-                              className="w-20 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-xs"
-                            />
-                          </td>
-                          <td className="p-2.5 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={row.lisan || ''}
-                              placeholder="0"
-                              onChange={(e) =>
-                                handleTableScoreChange(s.id, 'lisan', e.target.value)
-                              }
-                              className="w-20 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-xs"
-                            />
-                          </td>
-                          <td className="p-3.5 text-center">
-                            <span className="font-mono font-black text-slate-900 text-xs">
-                              {avg > 0 ? avg : '-'}
-                            </span>
-                          </td>
-                          <td className="p-3.5 text-center">
-                            <span
-                              className={`inline-block px-2 py-0.5 rounded text-[11px] font-black ${
-                                letter === 'A'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : letter === 'B'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : letter === 'C'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : letter === 'D'
-                                  ? 'bg-orange-100 text-orange-800'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              {letter}
-                            </span>
-                          </td>
-                          <td className="p-3.5 text-center">
-                            {avg > 0 ? (
-                              <span
-                                className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  isTuntas
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-rose-100 text-rose-800'
-                                }`}
-                              >
-                                {isTuntas ? 'Tuntas' : 'Remidi'}
-                              </span>
-                            ) : (
-                              <span className="text-slate-300">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Bottom Save Bar */}
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <span className="text-xs text-slate-500 font-medium">
-                Pastikan seluruh nilai telah diisi dengan benar sebelum menekan tombol simpan.
-              </span>
-              <button
-                type="button"
-                onClick={handleSaveAllTable}
-                className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-black rounded-xl text-xs shadow-md shadow-blue-900/10 cursor-pointer transition-all flex items-center gap-1.5"
-              >
-                <Save className="w-4 h-4" />
-                Simpan Semua Nilai ({currentGuruMapel?.nama || 'Mapel'})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* GURU MODE 2 (LEMBAR PER SANTRI) ATAU MODE DEFAULT WALI KELAS */}
-      {(!isGuru || guruViewMode === 'single') && (
-        <>
-          {displayedSantriList.length === 0 ? (
+      {/* TAMPILAN PENILAIAN SESUAI NAMA SANTRI */}
+      {displayedSantriList.length === 0 ? (
             <div className="bg-white rounded-3xl border border-amber-200 shadow-sm p-8 text-center space-y-4">
               <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
                 <AlertCircle className="w-7 h-7" />
@@ -1077,6 +617,63 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
             </div>
           ) : (
             <>
+              {/* Quick Student Name Selector Strip (Sesuai Nama Santri) */}
+              <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <Users className={`w-3.5 h-3.5 ${isGuru ? 'text-blue-600' : 'text-emerald-600'}`} />
+                    Pilih Nama Santri ({displayedSantriList.length} Santri di {selectedClass}):
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    * Klik nama santri di bawah untuk membuka lembar input nilainya
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-44 overflow-y-auto p-1">
+                  {displayedSantriList.map((s, idx) => {
+                    const isSelected = s.id === selectedSantriId;
+                    const sNilai = nilaiMap[s.id];
+                    const isGraded =
+                      activeSubjects.length > 0 &&
+                      activeSubjects.every((m) => {
+                        const score = sNilai?.akademik?.[m.id];
+                        return (score?.tulis?.skor || 0) > 0 || (score?.lisan?.skor || 0) > 0;
+                      });
+
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handleSelectSantri(s.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                          isSelected
+                            ? isGuru
+                              ? 'bg-blue-700 text-white border-blue-800 shadow-xs ring-2 ring-blue-300'
+                              : 'bg-emerald-700 text-white border-emerald-800 shadow-xs ring-2 ring-emerald-300'
+                            : isGraded
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                        title={`Pilih ${s.namaLengkap} (NIS: ${s.nis || '-'})`}
+                      >
+                        <span className="text-[10px] font-black opacity-70">
+                          {s.nomorUrutAbsen || idx + 1}.
+                        </span>
+                        <span>{s.namaLengkap}</span>
+                        {isGraded && (
+                          <span
+                            className={`text-[9px] px-1 rounded-full font-black ${
+                              isSelected ? 'bg-white/20 text-white' : 'bg-emerald-200 text-emerald-800'
+                            }`}
+                          >
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Header Selector Card */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -1601,8 +1198,6 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
           )}
             </>
           )}
-        </>
-      )}
     </div>
   );
 };

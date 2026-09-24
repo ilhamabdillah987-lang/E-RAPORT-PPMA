@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Santri, RaportSettings } from '../types';
-import { Plus, Search, Edit2, Trash2, UserCheck, X, Image as ImageIcon } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, UserCheck, X, Image as ImageIcon, Send } from 'lucide-react';
 
 interface IdentitasSantriViewProps {
   santriList: Santri[];
   settings: RaportSettings;
   onSaveSantri: (santri: Santri) => void;
   onDeleteSantri: (id: string) => void;
+  onNavigateMenu?: (menu: any) => void;
 }
 
 export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
@@ -14,6 +15,7 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
   settings,
   onSaveSantri,
   onDeleteSantri,
+  onNavigateMenu,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -121,6 +123,18 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
               className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white w-52 sm:w-64"
             />
           </div>
+
+          {onNavigateMenu && (
+            <button
+              type="button"
+              onClick={() => onNavigateMenu('push-santri')}
+              className="flex items-center gap-2 px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all shrink-0"
+              title="Push / Kirim data santri kelas ini ke akun guru pengajar"
+            >
+              <Send className="w-4 h-4 text-blue-700" />
+              <span>Push ke Akun Guru</span>
+            </button>
+          )}
 
           <button
             type="button"

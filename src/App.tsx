@@ -29,6 +29,7 @@ import { SettingRaportView } from './views/SettingRaportView';
 import { GoogleSheetSyncView } from './views/GoogleSheetSyncView';
 import { UserManagementView } from './views/UserManagementView';
 import { DownloadDataRaportView } from './views/DownloadDataRaportView';
+import { PushSantriView } from './views/PushSantriView';
 import {
   fetchSharedUsers,
   saveSharedUsers,
@@ -52,6 +53,7 @@ import {
   Sparkles,
   Download,
   UserPlus,
+  Send,
 } from 'lucide-react';
 
 export default function App() {
@@ -184,6 +186,7 @@ export default function App() {
   const [currentMenu, setCurrentMenu] = useState<
     | 'input-nilai'
     | 'identitas-santri'
+    | 'push-santri'
     | 'import-export'
     | 'print-raport'
     | 'upload-logo'
@@ -677,6 +680,12 @@ export default function App() {
             desc: 'Data 17 Poin Santri & Foto',
           },
           {
+            id: 'push-santri' as const,
+            label: 'Push Data Santri ke Guru',
+            icon: Send,
+            desc: 'Kirim Data Santri ke Akun Guru',
+          },
+          {
             id: 'import-export' as const,
             label: 'Import & Export Template',
             icon: FileSpreadsheet,
@@ -862,6 +871,19 @@ export default function App() {
             settings={settings}
             onSaveSantri={handleSaveSantri}
             onDeleteSantri={handleDeleteSantri}
+            onNavigateMenu={(menu) => setCurrentMenu(menu)}
+          />
+        )}
+
+        {effectiveMenu === 'push-santri' && (
+          <PushSantriView
+            santriList={santriList}
+            settings={settings}
+            users={users}
+            mapelList={mapelList}
+            currentUser={currentUser}
+            onRefreshData={handleRefreshData}
+            onNavigateMenu={(menu) => setCurrentMenu(menu)}
           />
         )}
 
