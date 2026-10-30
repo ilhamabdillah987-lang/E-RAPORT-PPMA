@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Santri, RaportSettings } from '../types';
 import { KELAS_OPTIONS } from '../data/defaultData';
-import { Plus, Search, Edit2, Trash2, UserCheck, X, Image as ImageIcon, Send } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, UserCheck, X, Image as ImageIcon, Send, Database, CheckCircle2, Cloud } from 'lucide-react';
+import { getGasWebAppUrl, isGasAutoSyncEnabled } from '../services/googleSheetsGasService';
 
 interface IdentitasSantriViewProps {
   santriList: Santri[];
@@ -21,6 +22,9 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSantri, setEditingSantri] = useState<Santri | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const hasGasConfigured = Boolean(getGasWebAppUrl());
+  const isAutoSyncOn = isGasAutoSyncEnabled();
 
   const emptySantri: Santri = {
     id: '',
@@ -78,6 +82,11 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
     e.preventDefault();
     onSaveSantri(formData);
     setIsModalOpen(false);
+
+    setToastMessage(`Data santri "${formData.namaLengkap}" berhasil disimpan & disinkronkan ke Google Sheet!`);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4500);
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,18 +111,43 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="bg-emerald-900 text-white px-4 py-3 rounded-2xl shadow-lg border border-emerald-700 flex items-center justify-between gap-3 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5 text-xs font-semibold">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="text-emerald-300 hover:text-white p-1 rounded-lg"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-black text-slate-900 uppercase">
-            Data Identitas Santri
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-black text-slate-900 uppercase">
+              Data Identitas Santri
+            </h2>
+            {isAutoSyncOn && (
+              <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Google Sheet Sync Aktif
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500 font-medium">
             Total {santriList.length} Santri terdaftar di {settings.namaKelas}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -121,19 +155,31 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
               placeholder="Cari nama atau NIS..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white w-52 sm:w-64"
+              className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white w-44 sm:w-56"
             />
           </div>
 
           {onNavigateMenu && (
             <button
               type="button"
+              onClick={() => onNavigateMenu('google-sheets')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all shrink-0"
+              title="Database Google Sheet & Apps Script"
+            >
+              <Database className="w-4 h-4 text-emerald-700" />
+              <span className="hidden sm:inline">Google Sheet</span>
+            </button>
+          )}
+
+          {onNavigateMenu && (
+            <button
+              type="button"
               onClick={() => onNavigateMenu('push-santri')}
-              className="flex items-center gap-2 px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all shrink-0"
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all shrink-0"
               title="Push / Kirim data santri kelas ini ke akun guru pengajar"
             >
               <Send className="w-4 h-4 text-blue-700" />
-              <span>Push ke Akun Guru</span>
+              <span className="hidden sm:inline">Push ke Guru</span>
             </button>
           )}
 

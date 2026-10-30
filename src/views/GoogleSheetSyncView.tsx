@@ -36,6 +36,19 @@ import {
   CheckSquare,
 } from 'lucide-react';
 
+import {
+  DEFAULT_GAS_PROJECT_ID,
+  DEFAULT_GAS_PROJECT_URL,
+  GAS_DATABASE_CODE,
+  getGasWebAppUrl,
+  setGasWebAppUrl as saveGasWebAppUrl,
+  isGasAutoSyncEnabled,
+  setGasAutoSyncEnabled as saveGasAutoSyncEnabled,
+  syncSantriToGas,
+  fetchSantriFromGas,
+  testGasConnection,
+} from '../services/googleSheetsGasService';
+
 interface GoogleSheetSyncViewProps {
   santriList: Santri[];
   mapelList: MataPelajaran[];
@@ -59,8 +72,8 @@ export const GoogleSheetSyncView: React.FC<GoogleSheetSyncViewProps> = ({
   users,
   onUpdateAllData,
 }) => {
-  // Mode selection: 'direct-api' (Google Workspace API) or 'apps-script' (Webhook)
-  const [activeMode, setActiveMode] = useState<'direct-api' | 'apps-script'>('direct-api');
+  // Mode selection: default to 'apps-script' (Google Apps Script Database)
+  const [activeMode, setActiveMode] = useState<'apps-script' | 'direct-api'>('apps-script');
 
   // Google OAuth Auth State
   const [googleUser, setGoogleUser] = useState<User | null>(null);
@@ -90,11 +103,21 @@ export const GoogleSheetSyncView: React.FC<GoogleSheetSyncViewProps> = ({
     onConfirm: () => void;
   } | null>(null);
 
-  // Google Apps Script state (legacy / alternative)
-  const [webAppUrl, setWebAppUrl] = useState<string>(
-    localStorage.getItem('alhikmah_gas_url') || ''
-  );
+  // Google Apps Script state
+  const [webAppUrl, setWebAppUrlState] = useState<string>(() => {
+    return getGasWebAppUrl();
+  });
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
+    return isGasAutoSyncEnabled();
+  });
+  const [lastGasSync, setLastGasSync] = useState<string>(() => {
+    return localStorage.getItem('alhikmah_last_gas_sync') || '';
+  });
+  const [connectedSpreadsheetUrl, setConnectedSpreadsheetUrl] = useState<string>(() => {
+    return localStorage.getItem('alhikmah_gas_spreadsheet_url') || '';
+  });
   const [copied, setCopied] = useState(false);
+
 
   // Init Google Auth listener on mount
   useEffect(() => {
@@ -298,23 +321,27 @@ export const GoogleSheetSyncView: React.FC<GoogleSheetSyncViewProps> = ({
   // Google Apps Script (Webhook) Handlers
   const handlePushToSheetsGAS = async () => {
     if (!webAppUrl.trim()) {
-      showStatus('info', 'Masukkan URL Google Apps Script Web App di bawah.');
+      showStatus('info', 'Masukkan URL Google Apps Script Web App terlebih dahulu.');
       return;
     }
 
     setIsProcessing(true);
     setStatusMsg(null);
     try {
-      const res = await syncToGoogleSheets(webAppUrl, {
-        santriList,
-        mapelList,
+      const res = await syncSantriToGas(santriList, webAppUrl.trim(), {
         nilaiMap,
         settings,
         users,
       });
 
       if (res.success) {
-        showStatus('success', 'Berhasil menyinkronkan seluruh database ke Google Sheet via Web App!');
+        const now = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+        setLastGasSync(now);
+        if (res.spreadsheetUrl) {
+          setConnectedSpreadsheetUrl(res.spreadsheetUrl);
+          localStorage.setItem('alhikmah_gas_spreadsheet_url', res.spreadsheetUrl);
+        }
+        showStatus('success', res.message || 'Berhasil menyinkronkan seluruh data santri ke Google Sheet!');
       } else {
         showStatus('error', res.message || 'Gagal menyinkronkan data.');
       }
@@ -334,18 +361,56 @@ export const GoogleSheetSyncView: React.FC<GoogleSheetSyncViewProps> = ({
     setIsProcessing(true);
     setStatusMsg(null);
     try {
-      const res = await fetchFromGoogleSheets(webAppUrl);
-      if (res.success && res.data) {
-        onUpdateAllData(res.data);
-        showStatus('success', 'Berhasil mengunduh data terbaru dari Google Spreadsheet via Web App!');
+      const res = await fetchSantriFromGas(webAppUrl.trim());
+      if (res.success && res.santriList && res.santriList.length > 0) {
+        onUpdateAllData({ santriList: res.santriList });
+        if (res.spreadsheetUrl) {
+          setConnectedSpreadsheetUrl(res.spreadsheetUrl);
+          localStorage.setItem('alhikmah_gas_spreadsheet_url', res.spreadsheetUrl);
+        }
+        showStatus('success', `Berhasil menarik ${res.santriList.length} data santri dari Google Sheet!`);
       } else {
-        showStatus('error', res.message || 'Data tidak ditemukan di Google Spreadsheet.');
+        showStatus('error', res.message || 'Tidak ada data santri ditemukan di Google Sheet.');
       }
     } catch (e: any) {
       showStatus('error', `Gagal mengambil data: ${e.message || e}`);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleTestConnectionGAS = async () => {
+    if (!webAppUrl.trim()) {
+      showStatus('error', 'Masukkan URL Web App terlebih dahulu.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setStatusMsg(null);
+    try {
+      const res = await testGasConnection(webAppUrl.trim());
+      if (res.success) {
+        const ssUrl = res.data?.spreadsheetUrl;
+        if (ssUrl) {
+          setConnectedSpreadsheetUrl(ssUrl);
+          localStorage.setItem('alhikmah_gas_spreadsheet_url', ssUrl);
+        }
+        showStatus('success', `Koneksi Google Apps Script Berhasil! ${res.data?.spreadsheetName ? `Spreadsheet: "${res.data.spreadsheetName}"` : ''}`);
+      } else {
+        showStatus('error', res.message || 'Koneksi gagal.');
+      }
+    } catch (e: any) {
+      showStatus('error', `Koneksi gagal: ${e.message || e}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleToggleAutoSync = () => {
+    const nextVal = !autoSyncEnabled;
+    setAutoSyncEnabled(nextVal);
+    saveGasAutoSyncEnabled(nextVal);
+    showStatus('info', nextVal ? 'Sinkronisasi otomatis saat input data santri diaktifkan.' : 'Sinkronisasi otomatis dinonaktifkan.');
   };
 
   const handleCopyScript = () => {
@@ -695,36 +760,136 @@ export const GoogleSheetSyncView: React.FC<GoogleSheetSyncViewProps> = ({
         </div>
       )}
 
-      {/* MODE 2: ALTERNATIVE APPS SCRIPT WEB APP */}
+      {/* MODE 2: GOOGLE APPS SCRIPT DATABASE (LINKED PROJECT) */}
       {activeMode === 'apps-script' && (
         <div className="space-y-6 animate-in fade-in">
-          {/* URL Configuration Card */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2">
-              <Database className="w-4 h-4 text-emerald-700" />
-              Koneksi Google Apps Script Web App
-            </h3>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
-                URL Web App Google Apps Script
-              </label>
-              <input
-                type="url"
-                value={webAppUrl}
-                onChange={(e) => {
-                  setWebAppUrl(e.target.value);
-                  localStorage.setItem('alhikmah_gas_url', e.target.value);
-                }}
-                placeholder="https://script.google.com/macros/s/.../exec"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
-              />
-              <p className="text-[11px] text-slate-500 mt-1.5">
-                Dapatkan URL ini setelah menerapkan kode skrip di bawah sebagai Web App di Google Sheets Anda.
+          {/* Linked Project Banner */}
+          <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 rounded-3xl p-6 text-white shadow-md border border-emerald-700/60 flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-400 text-emerald-950">
+                  Database Google Apps Script Aktif
+                </span>
+                <span className="text-emerald-300 text-xs font-mono">ID: {DEFAULT_GAS_PROJECT_ID}</span>
+              </div>
+              <h3 className="text-lg font-black text-white">
+                Proyek Script: 1UYYIOgxgT3uW4l6SYrTsx35pGjJN4r1eZEiGeGv7Xgi32EgTjUAz-JTP
+              </h3>
+              <p className="text-xs text-emerald-100/90 leading-relaxed max-w-2xl">
+                Proyek Google Apps Script Anda siap dijadikan database utama aplikasi ini. Seluruh data santri yang di-input atau diedit oleh wali kelas akan otomatis tersimpan dan terbarui ke dalam Google Sheet secara real-time.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row md:flex-col gap-2 shrink-0">
+              <a
+                href={DEFAULT_GAS_PROJECT_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 font-black rounded-xl text-xs shadow-md transition-all cursor-pointer"
+              >
+                <span>Buka Editor Script</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+
+              <button
+                type="button"
+                onClick={handleCopyScript}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-700/80 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs border border-emerald-500/50 transition-all cursor-pointer"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                <span>{copied ? 'Kode Tersalin!' : 'Salin Kode Database'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Web App Connection & Auto Sync Settings */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                  <Database className="w-4 h-4 text-emerald-700" />
+                  Koneksi Endpoint Web App
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Masukkan Web App Exec URL yang didapat dari menu <strong>Deploy &gt; New deployment</strong> di Google Apps Script.
+                </p>
+              </div>
+
+              {/* Auto Sync Toggle */}
+              <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-200 shrink-0">
+                <div className="text-right">
+                  <div className="text-xs font-bold text-slate-900">Auto-Sync Realtime</div>
+                  <div className="text-[10px] text-slate-500">Simpan otomatis saat input santri</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleAutoSync}
+                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
+                    autoSyncEnabled ? 'bg-emerald-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <div
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                      autoSyncEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Input URL */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase">
+                URL Web App Google Apps Script
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="url"
+                  value={webAppUrl}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWebAppUrlState(val);
+                    saveGasWebAppUrl(val);
+                  }}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
+                />
+                <button
+                  type="button"
+                  disabled={isProcessing || !webAppUrl.trim()}
+                  onClick={handleTestConnectionGAS}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-200 cursor-pointer transition-all disabled:opacity-50 shrink-0 flex items-center justify-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Test Koneksi</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Contoh: <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-800">https://script.google.com/macros/s/AKfycbx.../exec</code>
+              </p>
+            </div>
+
+            {/* Status Info Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Total Santri di Aplikasi:</span>
+                <span className="font-bold text-slate-900">{santriList.length} Santri Terdaftar</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Status Sinkronisasi Otomatis:</span>
+                <span className={`font-bold inline-flex items-center gap-1.5 ${autoSyncEnabled ? 'text-emerald-700' : 'text-slate-500'}`}>
+                  <span className={`w-2 h-2 rounded-full ${autoSyncEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                  {autoSyncEnabled ? 'Aktif (Real-time)' : 'Non-aktif'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Terakhir Disinkronkan:</span>
+                <span className="font-semibold text-slate-700">{lastGasSync || 'Belum pernah'}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
                 type="button"
                 disabled={isProcessing}
@@ -736,87 +901,108 @@ export const GoogleSheetSyncView: React.FC<GoogleSheetSyncViewProps> = ({
                 ) : (
                   <UploadCloud className="w-4 h-4" />
                 )}
-                Simpan / Push ke Google Sheet
+                Sinkronkan Seluruh Santri Sekarang ({santriList.length})
               </button>
 
               <button
                 type="button"
                 disabled={isProcessing}
                 onClick={handlePullFromSheetsGAS}
-                className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-200 cursor-pointer transition-all disabled:opacity-50"
+                className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs border border-slate-200 cursor-pointer transition-all disabled:opacity-50"
               >
                 <DownloadCloud className="w-4 h-4 text-slate-600" />
                 Tarik Data dari Google Sheet
               </button>
+
+              {connectedSpreadsheetUrl && (
+                <a
+                  href={connectedSpreadsheetUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-xs border border-emerald-200 transition-all cursor-pointer ml-auto"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                  <span>Buka Google Sheet Database ↗</span>
+                </a>
+              )}
             </div>
           </div>
 
-          {/* Google Apps Script Code Instructions */}
+          {/* Quick Step Guide */}
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                  Kode Skrip Penghubung Google Sheets (GAS)
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Salin kode skrip ini dan tempelkan pada menu <strong>Ekstensi &gt; Apps Script</strong> di Google Sheets Anda
+            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2">
+              <Info className="w-4 h-4 text-emerald-700" />
+              Panduan Pemasangan di Editor Google Apps Script (1 Menit)
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-700 text-white font-black flex items-center justify-center text-[11px]">
+                  1
+                </div>
+                <h4 className="font-bold text-slate-900">Buka Proyek Script</h4>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  Buka tautan proyek{' '}
+                  <a
+                    href={DEFAULT_GAS_PROJECT_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-emerald-700 font-bold underline inline-flex items-center gap-0.5"
+                  >
+                    Apps Script Anda <ExternalLink className="w-3 h-3" />
+                  </a>
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleCopyScript}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-xs border border-emerald-200 cursor-pointer transition-all shrink-0"
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4 text-emerald-600" />
-                    <span>Tersalin!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    <span>Salin Kode Skrip</span>
-                  </>
-                )}
-              </button>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-700 text-white font-black flex items-center justify-center text-[11px]">
+                  2
+                </div>
+                <h4 className="font-bold text-slate-900">Paste Kode Database</h4>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  Hapus kode default di file <code className="bg-slate-200 px-1 rounded">Code.gs</code>, lalu paste kode yang telah disalin. Tekan <strong>Ctrl + S</strong> untuk menyimpan.
+                </p>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-700 text-white font-black flex items-center justify-center text-[11px]">
+                  3
+                </div>
+                <h4 className="font-bold text-slate-900">Deploy sebagai Web App</h4>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  Klik <strong>Deploy &gt; New deployment</strong>. Pilih jenis <strong>Web app</strong>. Atur <em>Execute as: Me</em> dan <strong>Who has access: Anyone</strong>.
+                </p>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-700 text-white font-black flex items-center justify-center text-[11px]">
+                  4
+                </div>
+                <h4 className="font-bold text-slate-900">Tempel Web App URL</h4>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  Salin <strong>Web app URL</strong> yang dihasilkan, lalu tempelkan pada kolom URL di atas dan klik <strong>Test Koneksi</strong>.
+                </p>
+              </div>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
-              <p className="font-bold text-slate-800">Petunjuk Pemasangan Cepat (1 Menit):</p>
-              <ol className="list-decimal list-inside space-y-1.5 text-slate-600">
-                <li>
-                  Buka spreadsheet baru di{' '}
-                  <a
-                    href="https://sheets.new"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-emerald-700 underline font-bold inline-flex items-center gap-0.5"
-                  >
-                    sheets.new <ExternalLink className="w-3 h-3" />
-                  </a>
-                </li>
-                <li>
-                  Klik menu <strong>Extensions (Ekstensi) &gt; Apps Script</strong>
-                </li>
-                <li>
-                  Hapus kode bawaan, lalu <strong>Paste</strong> skrip yang telah disalin di bawah ini
-                </li>
-                <li>
-                  Klik tombol <strong>Deploy &gt; New deployment</strong>
-                </li>
-                <li>
-                  Pilih jenis <strong>Web App</strong>, atur <em>Who has access</em> ke <strong>Anyone (Siapa saja)</strong>
-                </li>
-                <li>
-                  Klik <strong>Deploy</strong>, lalu salin URL Web App dan tempelkan pada kolom di atas
-                </li>
-              </ol>
-            </div>
-
-            {/* Code Block */}
-            <div className="relative bg-slate-900 rounded-2xl p-4 text-slate-200 font-mono text-[11px] overflow-x-auto max-h-60 border border-slate-800">
-              <pre>{GOOGLE_APPS_SCRIPT_TEMPLATE}</pre>
+            {/* Code Box */}
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 uppercase">
+                  Isi Kode Skrip (Code.gs)
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyScript}
+                  className="flex items-center gap-1 px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg text-xs border border-emerald-200 cursor-pointer"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Tersalin' : 'Salin Kode'}</span>
+                </button>
+              </div>
+              <div className="relative bg-slate-950 rounded-2xl p-4 text-emerald-300 font-mono text-[11px] overflow-x-auto max-h-64 border border-slate-800 shadow-inner">
+                <pre>{GAS_DATABASE_CODE}</pre>
+              </div>
             </div>
           </div>
         </div>

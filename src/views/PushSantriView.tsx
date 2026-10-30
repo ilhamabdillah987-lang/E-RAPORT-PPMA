@@ -13,7 +13,9 @@ import {
   ArrowRight,
   School,
   Clock,
+  Database,
 } from 'lucide-react';
+import { syncSantriToGas, isGasAutoSyncEnabled } from '../services/googleSheetsGasService';
 
 interface PushSantriViewProps {
   santriList: Santri[];
@@ -142,7 +144,12 @@ export const PushSantriView: React.FC<PushSantriViewProps> = ({
         body: JSON.stringify(santriList),
       }).catch(() => {});
 
-      // 3. Update localStorage timestamp
+      // 3. Trigger Google Apps Script database sync in background
+      if (isGasAutoSyncEnabled()) {
+        syncSantriToGas(santriList).catch(() => {});
+      }
+
+      // 4. Update localStorage timestamp
       const nowStr = new Date().toLocaleString('id-ID', {
         dateStyle: 'medium',
         timeStyle: 'short',

@@ -1,0 +1,30 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and credentials for Wali Kelas and Guru with Google Account linkage",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 64 },
+        "password": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 150 },
+        "email": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "enum": ["admin", "walikelas", "guru"] },
+        "assignedClass": { "type": "string", "maxLength": 80 },
+        "kelasAkses": { "type": "string", "maxLength": 80 },
+        "nip": { "type": "string", "maxLength": 40 },
+        "authProvider": { "type": "string", "maxLength": 20 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "username", "role", "fullName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Registered user accounts for cross-device authentication"
+    }
+  }
+}

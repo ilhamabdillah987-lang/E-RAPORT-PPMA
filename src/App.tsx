@@ -35,6 +35,11 @@ import {
   saveSharedUsers,
   syncFromUrlHash,
 } from './services/cloudSync';
+import {
+  saveSingleSantriToGas,
+  syncSantriToGas,
+  isGasAutoSyncEnabled,
+} from './services/googleSheetsGasService';
 
 import {
   PenTool,
@@ -472,6 +477,14 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       }).catch(() => {});
+
+      // Auto-sync to Google Apps Script Web App database
+      if (isGasAutoSyncEnabled()) {
+        saveSingleSantriToGas(santri).catch((err) => {
+          console.warn('Google Sheet auto-sync notification:', err);
+        });
+      }
+
       return updated;
     });
   };
@@ -484,6 +497,11 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       }).catch(() => {});
+
+      if (isGasAutoSyncEnabled()) {
+        syncSantriToGas(updated).catch(() => {});
+      }
+
       return updated;
     });
   };
@@ -495,6 +513,10 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(imported),
     }).catch(() => {});
+
+    if (isGasAutoSyncEnabled()) {
+      syncSantriToGas(imported).catch(() => {});
+    }
   };
 
   const handleImportNilai = (importedMap: Record<string, NilaiSantri>) => {
@@ -676,6 +698,12 @@ export default function App() {
             desc: 'Upload Logo untuk Login, Kop & Cover Raport',
           },
           {
+            id: 'google-sheets' as const,
+            label: 'Database Google Sheet (GAS)',
+            icon: Database,
+            desc: 'Database Script & Spreadsheet Pesantren',
+          },
+          {
             id: 'download-raport' as const,
             label: 'Download Data Raport',
             icon: Download,
@@ -745,7 +773,7 @@ export default function App() {
   // Enforce role-based menu access
   const effectiveMenu =
     currentUser.role === 'admin'
-      ? currentMenu === 'download-raport' || currentMenu === 'upload-logo'
+      ? currentMenu === 'download-raport' || currentMenu === 'upload-logo' || currentMenu === 'google-sheets'
         ? currentMenu
         : 'user-management'
       : currentUser.role === 'guru'
@@ -792,15 +820,20 @@ export default function App() {
           {/* User Profile & Logout */}
           <div className="flex items-center gap-3">
             <div className="hidden md:flex flex-col text-right">
-              <span className="text-xs font-bold text-white">
-                {currentUser.namaLengkap || currentUser.fullName}
+              <span className="text-xs font-bold text-white flex items-center gap-1.5 justify-end">
+                <span>{currentUser.namaLengkap || currentUser.fullName}</span>
+                {currentUser.authProvider === 'google' && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-500/30 text-emerald-300 border border-emerald-400/30">
+                    Google
+                  </span>
+                )}
               </span>
-              <span className="text-[10px] text-emerald-300 font-semibold uppercase tracking-wider">
+              <span className="text-[10px] text-emerald-300 font-semibold tracking-wider">
                 {currentUser.role === 'admin'
                   ? 'Administrator'
                   : currentUser.role === 'walikelas'
-                  ? `Wali Kelas (${currentUser.kelasAkses || currentUser.assignedClass || settings.namaKelas})`
-                  : 'Guru Pengajar'}
+                  ? `Wali Kelas • @${currentUser.username} (${currentUser.kelasAkses || currentUser.assignedClass || settings.namaKelas})`
+                  : `Guru Pengajar • @${currentUser.username}`}
               </span>
             </div>
 

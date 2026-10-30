@@ -283,6 +283,21 @@ app.post('/api/santri', (req, res) => {
     if (Array.isArray(req.body)) {
       currentStore.santriList = req.body;
       saveStore(currentStore);
+
+      // Background auto-sync to Google Apps Script if URL is configured
+      const gasUrl = currentStore.settings?.googleSheetWebAppUrl;
+      if (gasUrl && typeof gasUrl === 'string' && gasUrl.startsWith('http')) {
+        fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'syncSantriList',
+            santriList: currentStore.santriList,
+            timestamp: new Date().toISOString(),
+          }),
+          redirect: 'follow',
+        }).catch((err) => console.warn('Background GAS auto-sync warning:', err.message));
+      }
     }
     res.json({ success: true, count: (currentStore.santriList || []).length });
   } catch (err: any) {
@@ -362,6 +377,69 @@ app.post('/api/sync-all', (req, res) => {
     res.json({ success: true, lastUpdated: currentStore.lastUpdated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 9. Google Apps Script Database Sync Proxy
+app.post('/api/gas/sync', async (req, res) => {
+  try {
+    const { webAppUrl, payload } = req.body || {};
+    const targetUrl = webAppUrl || currentStore.settings?.googleSheetWebAppUrl;
+
+    if (!targetUrl || !targetUrl.startsWith('http')) {
+      return res.status(400).json({ success: false, message: 'URL Google Apps Script tidak valid' });
+    }
+
+    const gasResponse = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload || { santriList: currentStore.santriList }),
+      redirect: 'follow',
+    });
+
+    const responseText = await gasResponse.text();
+    let responseJson = {};
+    try {
+      responseJson = JSON.parse(responseText);
+    } catch (e) {
+      responseJson = { raw: responseText };
+    }
+
+    res.json({
+      success: gasResponse.ok,
+      status: gasResponse.status,
+      ...responseJson,
+    });
+  } catch (err: any) {
+    console.error('GAS proxy sync error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/gas/fetch', async (req, res) => {
+  try {
+    const targetUrl = (req.query.url as string) || currentStore.settings?.googleSheetWebAppUrl;
+    if (!targetUrl || !targetUrl.startsWith('http')) {
+      return res.status(400).json({ success: false, message: 'URL Google Apps Script tidak valid' });
+    }
+
+    const gasResponse = await fetch(targetUrl, {
+      method: 'GET',
+      redirect: 'follow',
+    });
+
+    const responseText = await gasResponse.text();
+    let responseJson = {};
+    try {
+      responseJson = JSON.parse(responseText);
+    } catch (e) {
+      responseJson = { raw: responseText };
+    }
+
+    res.json(responseJson);
+  } catch (err: any) {
+    console.error('GAS proxy fetch error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

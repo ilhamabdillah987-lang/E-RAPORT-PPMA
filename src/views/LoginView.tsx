@@ -26,7 +26,11 @@ import {
   syncFromUrlHash,
   saveSharedUsers,
 } from '../services/cloudSync';
-import { signInWithGoogle } from '../services/googleAuth';
+import {
+  signInWithGoogle,
+  saveUserToFirestore,
+  fetchUserFromFirestore,
+} from '../services/googleAuth';
 import {
   GoogleRegistrationModal,
   GoogleAuthProfile,
@@ -116,13 +120,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
       const cleanEmail = (gUser.email || '').toLowerCase().trim();
       const cleanUsername = cleanEmail ? cleanEmail.split('@')[0] : '';
 
-      // Match against existing users
-      const existingUser = allUsers.find(
+      // Match against existing users (local, server, or Firestore)
+      let existingUser = allUsers.find(
         (u) =>
           (u.googleUid && u.googleUid === gUser.uid) ||
           (cleanEmail && u.email && u.email.toLowerCase().trim() === cleanEmail) ||
           (cleanUsername && (u.username || '').toLowerCase().trim() === cleanUsername)
       );
+
+      // If not found in current memory, try fetching directly from Firestore by Google UID
+      if (!existingUser) {
+        try {
+          const fsUser = await fetchUserFromFirestore(gUser.uid);
+          if (fsUser) {
+            existingUser = fsUser;
+            const updated = [...allUsers, fsUser];
+            setServerUsers(updated);
+            localStorage.setItem('alhikmah_users', JSON.stringify(updated));
+          }
+        } catch (fsErr) {
+          console.warn('Firestore lookup warning:', fsErr);
+        }
+      }
 
       if (existingUser && mode === 'masuk') {
         setGoogleNotice({
@@ -186,7 +205,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setIsGoogleRegModalOpen(false);
     setGoogleProfileForReg(null);
 
-    // 1. Invoke onRegisterUser
+    // 1. Invoke onRegisterUser callback
     if (onRegisterUser) {
       onRegisterUser(newUser);
     }
@@ -199,21 +218,30 @@ export const LoginView: React.FC<LoginViewProps> = ({
       await saveSharedUsers(next);
     } catch (e) {}
 
-    // 3. Post to backend API
-    fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newUser),
-    }).catch(() => {});
+    // 3. Save to Firebase Firestore /users/{uid} for cross-device persistence
+    try {
+      await saveUserToFirestore(newUser);
+    } catch (fsErr) {
+      console.warn('Firestore user save notice:', fsErr);
+    }
+
+    // 4. Post to backend server (/api/users)
+    try {
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser),
+      });
+    } catch (e) {}
 
     setGoogleNotice({
       type: 'success',
-      text: `Pendaftaran Berhasil! Selamat datang, ${newUser.namaLengkap}. Mengalihkan ke sistem E-Raport...`,
+      text: `Pendaftaran Berhasil! Akun "${newUser.username}" aktif. Anda kini dapat login di perangkat (device) manapun menggunakan Username & Password Anda, ataupun lewat Akun Google.`,
     });
 
     setTimeout(() => {
       onLogin(newUser);
-    }, 600);
+    }, 700);
   };
 
   const handleManualRefreshCloud = async () => {
@@ -314,7 +342,30 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
 
-    // 1. Check if user exists by username or email (case-insensitive)
+    // 1. Centralized server-side verification first (enables cross-device login on any browser/device)
+    try {
+      const resp = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanUsername, password: cleanPassword }),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success && data.user) {
+        if (Array.isArray(data.allUsers)) {
+          setServerUsers(data.allUsers);
+          localStorage.setItem('alhikmah_users', JSON.stringify(data.allUsers));
+        }
+        onLogin(data.user);
+        return;
+      } else if (data.code === 'INVALID_PASSWORD') {
+        setError(data.message || `Password yang Anda masukkan salah untuk akun "${cleanUsername}".`);
+        return;
+      }
+    } catch (apiErr) {
+      // Server offline / network fallback
+    }
+
+    // 2. Check if user exists in client state by username or email
     let matchedUser = allUsers.find(
       (u) =>
         u.username.trim().toLowerCase() === cleanUsername ||
@@ -346,17 +397,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
         );
       } else if (loginMode === 'walikelas') {
         setError(
-          `Username / Akun "${username.trim()}" tidak ditemukan. Silakan gunakan tombol "Daftar Akun Google" di atas atau hubungi Admin.`
+          `Username / Akun "${username.trim()}" tidak ditemukan. Silakan gunakan tombol "Daftar Akun Google" di atas untuk membuat username & password Wali Kelas.`
         );
       } else {
         setError(`Username "${username.trim()}" tidak ditemukan sebagai Administrator.`);
       }
-      return;
-    }
-
-    // If user is registered with Google OAuth, allow direct entry
-    if (matchedUser.authProvider === 'google') {
-      onLogin(matchedUser);
       return;
     }
 
@@ -365,16 +410,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
 
-    // 2. Validate Password (supports exact match or trimmed match)
+    // 3. Validate Password (supports exact match or trimmed match)
     const expectedPassword = matchedUser.password || '';
-    if (expectedPassword !== password && expectedPassword.trim() !== cleanPassword) {
+    if (expectedPassword && expectedPassword !== '-' && expectedPassword !== password && expectedPassword.trim() !== cleanPassword) {
       setError(
         `Password yang Anda masukkan salah untuk akun "${matchedUser.username}". Silakan periksa kembali huruf besar/kecil atau hubungi Admin.`
       );
       return;
     }
 
-    // 3. Complete login
+    // 4. Complete login
     onLogin(matchedUser);
   };
 
@@ -915,6 +960,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           }}
           googleProfile={googleProfileForReg}
           mapelList={mapelList}
+          existingUsers={allUsers}
           onCompleteRegistration={handleCompleteGoogleRegistration}
         />
       )}

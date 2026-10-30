@@ -9,6 +9,13 @@ import {
   AlertCircle,
   School,
   Sparkles,
+  Lock,
+  Eye,
+  EyeOff,
+  KeyRound,
+  ShieldCheck,
+  Smartphone,
+  Laptop,
 } from 'lucide-react';
 
 export interface GoogleAuthProfile {
@@ -23,6 +30,7 @@ interface GoogleRegistrationModalProps {
   onClose: () => void;
   googleProfile: GoogleAuthProfile;
   mapelList?: MataPelajaran[];
+  existingUsers?: AppUser[];
   onCompleteRegistration: (newUser: AppUser) => void;
 }
 
@@ -31,9 +39,23 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
   onClose,
   googleProfile,
   mapelList = [],
+  existingUsers = [],
   onCompleteRegistration,
 }) => {
-  const [role, setRole] = useState<'guru' | 'walikelas'>('guru');
+  // Default to 'walikelas' as requested by the user prompt
+  const [role, setRole] = useState<'walikelas' | 'guru'>('walikelas');
+
+  // Custom Username & Password fields for cross-device login
+  const defaultUsername = googleProfile.email
+    ? googleProfile.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+    : (googleProfile.displayName || '').toLowerCase().replace(/[^a-zA-Z0-9_]/g, '');
+
+  const [username, setUsername] = useState(defaultUsername || 'walikelas');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Profile data
   const [namaLengkap, setNamaLengkap] = useState(googleProfile.displayName || '');
   const [nip, setNip] = useState('');
   const [kelasAkses, setKelasAkses] = useState(KELAS_OPTIONS[0] || '7 MTS PUTRA');
@@ -49,6 +71,48 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const cleanUsername = username.trim().toLowerCase();
+    if (!cleanUsername) {
+      setError('Username wajib diisi untuk login di perangkat lain.');
+      return;
+    }
+
+    if (cleanUsername.length < 3) {
+      setError('Username minimal 3 karakter.');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_.-]+$/.test(cleanUsername)) {
+      setError('Username hanya boleh berisi huruf, angka, titik (.), minus (-), atau garis bawah (_).');
+      return;
+    }
+
+    // Check username uniqueness
+    const duplicate = existingUsers.some(
+      (u) =>
+        u.username.trim().toLowerCase() === cleanUsername &&
+        u.googleUid !== googleProfile.uid
+    );
+    if (duplicate) {
+      setError(`Username "${cleanUsername}" sudah digunakan oleh akun lain. Silakan pilih username lain.`);
+      return;
+    }
+
+    if (!password) {
+      setError('Password wajib dibuat agar Anda bisa login di perangkat manapun.');
+      return;
+    }
+
+    if (password.length < 4) {
+      setError('Password minimal 4 karakter.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Konfirmasi password tidak cocok dengan password yang Anda buat.');
+      return;
+    }
 
     const trimmedName = namaLengkap.trim();
     if (!trimmedName) {
@@ -72,15 +136,10 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
       .filter((m) => selectedMapelIds.includes(m.id))
       .map((m) => m.nama);
 
-    // Generate safe username from Google email or displayName
-    const baseUsername = googleProfile.email
-      ? googleProfile.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '')
-      : trimmedName.toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
-
     const newUser: AppUser = {
       id: `google-${googleProfile.uid || Date.now()}`,
-      username: baseUsername || `user_${Date.now()}`,
-      password: '-', // Authenticated via Google
+      username: cleanUsername,
+      password: password, // Custom password for cross-device authentication
       role,
       fullName: trimmedName,
       namaLengkap: trimmedName,
@@ -100,8 +159,8 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
-      <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[92vh] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+      <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[94vh] flex flex-col">
         {/* Header with Google User Info */}
         <div className="p-5 bg-linear-to-r from-emerald-900 via-teal-900 to-slate-900 text-white flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
@@ -121,13 +180,13 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
               <div className="flex items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                   <Sparkles className="w-3 h-3 text-emerald-300" />
-                  Akun Google Terverifikasi
+                  Akun Google Resmi Terverifikasi
                 </span>
               </div>
               <h3 className="font-bold text-sm text-white mt-0.5">
                 {googleProfile.displayName || 'Pengguna Google'}
               </h3>
-              <p className="text-[11px] text-emerald-200/80 font-mono">
+              <p className="text-[11px] text-emerald-200/90 font-mono">
                 {googleProfile.email || 'Google Account'}
               </p>
             </div>
@@ -143,6 +202,17 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
           </button>
         </div>
 
+        {/* Cross-Device Notice Banner */}
+        <div className="px-5 py-2.5 bg-emerald-50 border-b border-emerald-200/80 flex items-center gap-2 text-xs text-emerald-900">
+          <div className="flex items-center gap-1 text-emerald-700 font-bold shrink-0">
+            <Laptop className="w-4 h-4" />
+            <Smartphone className="w-4 h-4" />
+          </div>
+          <span className="leading-tight">
+            Setelah pendaftaran Google ini, buatlah <strong>Username & Password Anda sendiri</strong> agar dapat login di <strong>device manapun</strong> (HP, Laptop, PC).
+          </span>
+        </div>
+
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 text-xs overflow-y-auto flex-1">
           {error && (
@@ -152,46 +222,13 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
             </div>
           )}
 
-          {/* STEP 1: PILIH PERAN (GURU ATAU WALI KELAS) */}
+          {/* STEP 1: PILIH PERAN (WALI KELAS ATAU GURU) */}
           <div>
             <label className="block font-black text-slate-800 uppercase tracking-wide mb-2 text-[11px]">
               1. Pilih Pendaftaran Sebagai:
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Option A: Guru Pengajar */}
-              <button
-                type="button"
-                id="btn-role-guru"
-                onClick={() => setRole('guru')}
-                className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  role === 'guru'
-                    ? 'border-blue-600 bg-blue-50/70 shadow-md shadow-blue-900/10'
-                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                      role === 'guru' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    <BookOpen className="w-5 h-5" />
-                  </div>
-                  {role === 'guru' && (
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center">
-                      <Check className="w-3.5 h-3.5" />
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900">Guru Pengajar</div>
-                  <div className="text-[11px] text-slate-500 mt-1 leading-normal">
-                    Menginput & mengelola nilai santri untuk mata pelajaran yang Anda ajarkan.
-                  </div>
-                </div>
-              </button>
-
-              {/* Option B: Wali Kelas */}
+              {/* Option A: Wali Kelas (Highlighted) */}
               <button
                 type="button"
                 id="btn-role-walikelas"
@@ -225,14 +262,130 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
                   </div>
                 </div>
               </button>
+
+              {/* Option B: Guru Pengajar */}
+              <button
+                type="button"
+                id="btn-role-guru"
+                onClick={() => setRole('guru')}
+                className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  role === 'guru'
+                    ? 'border-blue-600 bg-blue-50/70 shadow-md shadow-blue-900/10'
+                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                      role === 'guru' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  {role === 'guru' && (
+                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                      <Check className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <div className="font-extrabold text-sm text-slate-900">Guru Pengajar</div>
+                  <div className="text-[11px] text-slate-500 mt-1 leading-normal">
+                    Menginput & mengelola nilai santri untuk mata pelajaran yang Anda ampu.
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
 
-          {/* STEP 2: NAMA LENGKAP & GELAR */}
+          {/* STEP 2: BUAT USERNAME & PASSWORD SENDIRI (KUNCI CROSS-DEVICE) */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+            <div className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div>
+                <label className="font-black text-slate-900 uppercase text-[11px] block">
+                  2. Buat Username & Password Sendiri (Untuk Login di Device Manapun)
+                </label>
+                <p className="text-[10px] text-slate-500">
+                  Dengan username & password ini, Anda bisa login dari HP atau komputer manapun tanpa harus login Google.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Field Username */}
+              <div>
+                <label className="block font-bold text-slate-700 uppercase mb-1 text-[10px]">
+                  Username Anda
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                  placeholder="e.g. walikelas7a"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 text-xs font-mono"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Huruf kecil tanpa spasi</span>
+              </div>
+
+              {/* Field Password */}
+              <div>
+                <label className="block font-bold text-slate-700 uppercase mb-1 text-[10px]">
+                  Password Pilihan Anda
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Min. 4 karakter"
+                    className="w-full px-3 py-2 pr-8 bg-white border border-slate-300 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 text-xs font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Field Konfirmasi Password */}
+              <div>
+                <label className="block font-bold text-slate-700 uppercase mb-1 text-[10px]">
+                  Ulangi Password
+                </label>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Ketik ulang password"
+                  className={`w-full px-3 py-2 bg-white border rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 text-xs font-mono ${
+                    confirmPassword && confirmPassword !== password
+                      ? 'border-rose-400 bg-rose-50/50'
+                      : confirmPassword && confirmPassword === password
+                      ? 'border-emerald-500 bg-emerald-50/30'
+                      : 'border-slate-300'
+                  }`}
+                />
+                {confirmPassword && confirmPassword === password && (
+                  <span className="text-[10px] text-emerald-600 mt-0.5 flex items-center gap-0.5 font-bold">
+                    <Check className="w-3 h-3" /> Cocok
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* STEP 3: NAMA LENGKAP & NIP */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
               <label className="block font-bold text-slate-700 uppercase mb-1 text-[11px]">
-                2. Nama Lengkap & Gelar
+                3. Nama Lengkap & Gelar (Untuk Raport)
               </label>
               <input
                 type="text"
@@ -258,23 +411,62 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
             </div>
           </div>
 
-          {/* STEP 3A: JIKA GURU - PILIH MATA PELAJARAN YANG DIAJARKAN */}
+          {/* STEP 4A: JIKA WALI KELAS - PILIH KELAS BINAAN */}
+          {role === 'walikelas' && (
+            <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-2.5">
+              <label className="block font-bold text-emerald-950 uppercase text-[11px] flex items-center gap-1.5">
+                <School className="w-3.5 h-3.5 text-emerald-700" />
+                4. Pilih Kelas Binaan Anda:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <select
+                  value={kelasAkses}
+                  onChange={(e) => setKelasAkses(e.target.value)}
+                  className="px-3 py-2.5 bg-white border border-emerald-300 rounded-xl font-bold text-slate-800 text-xs"
+                >
+                  {KELAS_OPTIONS.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                  <option value="LAINNYA">+ Ketik Kelas Lain...</option>
+                </select>
+
+                {kelasAkses === 'LAINNYA' ? (
+                  <input
+                    type="text"
+                    required
+                    value={customKelas}
+                    onChange={(e) => setCustomKelas(e.target.value)}
+                    placeholder="Ketik nama kelas..."
+                    className="px-3 py-2.5 bg-white border border-emerald-300 rounded-xl font-bold text-slate-800 uppercase text-xs"
+                  />
+                ) : (
+                  <div className="flex items-center text-[11px] text-emerald-800 font-medium px-2">
+                    Kelas yang Anda kelola untuk absensi dan cetak raport.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4B: JIKA GURU - PILIH MATA PELAJARAN YANG DIAJARKAN */}
           {role === 'guru' && (
             <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-3">
               <div className="flex items-center justify-between">
                 <label className="font-bold text-blue-950 uppercase text-[11px] flex items-center gap-1.5">
                   <BookOpen className="w-3.5 h-3.5 text-blue-700" />
-                  3. Pilih Mata Pelajaran yang Anda Ampu:
+                  4. Pilih Mata Pelajaran yang Anda Ampu:
                 </label>
                 <span className="text-[10px] font-black text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full">
                   {selectedMapelIds.length} Mapel Dipilih
                 </span>
               </div>
               <p className="text-[11px] text-blue-800 leading-normal">
-                Centang mata pelajaran yang Anda ajarkan. Anda akan dapat menginput nilai santri untuk mata pelajaran ini:
+                Centang mata pelajaran yang Anda ajarkan. Anda dapat menginput nilai santri untuk mata pelajaran ini:
               </p>
 
-              <div className="max-h-52 overflow-y-auto space-y-3 bg-white p-3 rounded-xl border border-blue-200">
+              <div className="max-h-48 overflow-y-auto space-y-3 bg-white p-3 rounded-xl border border-blue-200">
                 {categories.map((cat) => {
                   const catMapels = mapelList.filter((m) => (m.kategori || 'Lainnya') === cat);
                   const allCatSelected =
@@ -342,45 +534,6 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
             </div>
           )}
 
-          {/* STEP 3B: JIKA WALI KELAS - TETAPKAN KELAS BINAAN */}
-          {role === 'walikelas' && (
-            <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-2.5">
-              <label className="block font-bold text-emerald-950 uppercase text-[11px] flex items-center gap-1.5">
-                <School className="w-3.5 h-3.5 text-emerald-700" />
-                3. Pilih Kelas Binaan Anda:
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <select
-                  value={kelasAkses}
-                  onChange={(e) => setKelasAkses(e.target.value)}
-                  className="px-3 py-2.5 bg-white border border-emerald-300 rounded-xl font-bold text-slate-800 text-xs"
-                >
-                  {KELAS_OPTIONS.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                  <option value="LAINNYA">+ Ketik Kelas Lain...</option>
-                </select>
-
-                {kelasAkses === 'LAINNYA' ? (
-                  <input
-                    type="text"
-                    required
-                    value={customKelas}
-                    onChange={(e) => setCustomKelas(e.target.value)}
-                    placeholder="Ketik nama kelas..."
-                    className="px-3 py-2.5 bg-white border border-emerald-300 rounded-xl font-bold text-slate-800 uppercase text-xs"
-                  />
-                ) : (
-                  <div className="flex items-center text-[11px] text-emerald-800 font-medium px-2">
-                    Anda akan mengelola kelas ini di E-Raport
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Submit Action */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
             <button
@@ -392,14 +545,14 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
             </button>
             <button
               type="submit"
-              className={`px-5 py-2.5 text-white font-black rounded-xl text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-5 py-2.5 text-white font-black rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer ${
                 role === 'guru'
                   ? 'bg-blue-700 hover:bg-blue-800 shadow-blue-900/20'
                   : 'bg-emerald-700 hover:bg-emerald-800 shadow-emerald-900/20'
               }`}
             >
-              <Check className="w-4 h-4" />
-              Selesaikan Pendaftaran & Masuk
+              <ShieldCheck className="w-4 h-4" />
+              Selesaikan Pendaftaran & Simpan Akun
             </button>
           </div>
         </form>
