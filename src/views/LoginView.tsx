@@ -70,7 +70,19 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [googleProfileForReg, setGoogleProfileForReg] = useState<GoogleAuthProfile | null>(null);
   const [isGoogleRegModalOpen, setIsGoogleRegModalOpen] = useState(false);
+  const [regInitialRole, setRegInitialRole] = useState<'walikelas' | 'guru'>('walikelas');
   const [googleNotice, setGoogleNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  const handleOpenDirectGoogleReg = (desiredRole: 'walikelas' | 'guru' = 'walikelas') => {
+    setRegInitialRole(desiredRole);
+    setGoogleProfileForReg({
+      uid: '',
+      email: '',
+      displayName: '',
+      photoURL: '',
+    });
+    setIsGoogleRegModalOpen(true);
+  };
 
   // Fetch users from cloud relay, server, and URL hash
   useEffect(() => {
@@ -521,40 +533,70 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Tombol 1: Daftar dengan Akun Google */}
+          <div className="space-y-2.5">
+            {/* Tombol Utama: DAFTAR DENGAN MENGETIK AKUN GOOGLE MASING-MASING */}
             <button
               type="button"
-              id="btn-google-register"
-              disabled={isGoogleLoading}
-              onClick={() => handleStartGoogleAuth('daftar')}
-              className="w-full py-3 px-3.5 bg-white hover:bg-slate-50 text-slate-800 font-black text-xs rounded-2xl border-2 border-emerald-500/50 hover:border-emerald-600 shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
+              id="btn-google-type-register"
+              onClick={() => handleOpenDirectGoogleReg(loginMode === 'guru' ? 'guru' : 'walikelas')}
+              className="w-full py-3.5 px-4 bg-linear-to-r from-emerald-600 via-teal-700 to-slate-800 hover:from-emerald-700 hover:to-teal-900 text-white font-black text-xs sm:text-sm rounded-2xl shadow-lg shadow-emerald-950/20 transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group border-2 border-emerald-400/50"
             >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-              </svg>
-              <span>{isGoogleLoading ? 'Menghubungkan...' : 'Daftar Akun Google'}</span>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white p-2 flex items-center justify-center shrink-0 shadow-sm">
+                  <svg className="w-full h-full" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <div className="text-xs sm:text-sm font-black flex items-center gap-1.5 text-white">
+                    <span>Daftar dengan Mengetik Akun Google Sendiri</span>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                  </div>
+                  <div className="text-[11px] text-emerald-100 font-normal mt-0.5">
+                    Ketik akun @gmail.com & buat password untuk login di HP / Laptop manapun
+                  </div>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-emerald-200 group-hover:translate-x-1 transition-transform shrink-0" />
             </button>
 
-            {/* Tombol 2: Masuk dengan Akun Google */}
-            <button
-              type="button"
-              id="btn-google-login"
-              disabled={isGoogleLoading}
-              onClick={() => handleStartGoogleAuth('masuk')}
-              className="w-full py-3 px-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs rounded-2xl shadow-md shadow-emerald-950/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
-            >
-              <svg className="w-4 h-4 shrink-0 brightness-200" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-              </svg>
-              <span>{isGoogleLoading ? 'Menghubungkan...' : 'Masuk Akun Google'}</span>
-            </button>
+            {/* Opsi Cepat: Popup Google */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+              <button
+                type="button"
+                id="btn-google-register-popup"
+                disabled={isGoogleLoading}
+                onClick={() => handleStartGoogleAuth('daftar')}
+                className="py-2 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 hover:border-slate-400 shadow-2xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span>{isGoogleLoading ? 'Menghubungkan...' : 'Daftar Otomatis (Popup Google)'}</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-google-login-popup"
+                disabled={isGoogleLoading}
+                onClick={() => handleStartGoogleAuth('masuk')}
+                className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl border border-slate-300 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span>{isGoogleLoading ? 'Menghubungkan...' : 'Masuk Cepat (Popup Google)'}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -675,13 +717,24 @@ export const LoginView: React.FC<LoginViewProps> = ({
             )}
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                {loginMode === 'guru'
-                  ? 'Username Guru Pengajar'
-                  : loginMode === 'walikelas'
-                  ? 'Username Wali Kelas'
-                  : 'Username Administrator'}
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  {loginMode === 'guru'
+                    ? 'Username atau Email Google Guru'
+                    : loginMode === 'walikelas'
+                    ? 'Username atau Email Google Wali Kelas'
+                    : 'Username Administrator'}
+                </label>
+                {(loginMode === 'guru' || loginMode === 'walikelas') && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenDirectGoogleReg(loginMode)}
+                    className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold underline cursor-pointer"
+                  >
+                    + Daftar Akun Google
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -692,12 +745,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder={
                     loginMode === 'guru'
-                      ? 'Masukkan username guru (misal: guru)'
+                      ? 'Ketik email Google (e.g. guru@gmail.com) atau username'
                       : loginMode === 'walikelas'
-                      ? 'Masukkan username wali kelas (misal: walikelas7)'
+                      ? 'Ketik email Google (e.g. walikelas@gmail.com) atau username'
                       : 'Masukkan username admin'
                   }
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all font-medium"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white transition-all font-medium"
                 />
               </div>
             </div>
@@ -971,13 +1024,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
       </div>
 
       {/* Modal Pendaftaran Mandiri Akun Google */}
-      {isGoogleRegModalOpen && googleProfileForReg && (
+      {isGoogleRegModalOpen && (
         <GoogleRegistrationModal
           isOpen={isGoogleRegModalOpen}
           onClose={() => {
             setIsGoogleRegModalOpen(false);
             setGoogleProfileForReg(null);
           }}
+          initialRole={regInitialRole}
           googleProfile={googleProfileForReg}
           mapelList={mapelList}
           existingUsers={allUsers}

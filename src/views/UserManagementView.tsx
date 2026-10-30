@@ -541,6 +541,21 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                               <div className="font-mono text-[11px] font-bold text-slate-800 break-all">
                                 {u.email || u.username}
                               </div>
+                              {u.username && u.username !== u.email && (
+                                <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                  user: {u.username}
+                                </div>
+                              )}
+                              {u.password && (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[10px] uppercase font-bold text-slate-400">
+                                    Pass:
+                                  </span>
+                                  <span className="font-mono font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded text-[10px] border border-emerald-100">
+                                    {u.password}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <>
