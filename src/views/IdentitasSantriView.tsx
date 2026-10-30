@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Santri, RaportSettings } from '../types';
+import { KELAS_OPTIONS } from '../data/defaultData';
 import { Plus, Search, Edit2, Trash2, UserCheck, X, Image as ImageIcon, Send } from 'lucide-react';
 
 interface IdentitasSantriViewProps {
@@ -467,10 +468,11 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
                     </label>
                     <input
                       type="text"
+                      list="santriKelasList"
                       value={formData.diterimaKelas}
                       onChange={(e) => setFormData({ ...formData, diterimaKelas: e.target.value })}
-                      placeholder="7 MTS PUTRA"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl"
+                      placeholder="e.g. 7 MTS PUTRA & PUTRI"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl uppercase font-semibold"
                     />
                   </div>
                   <div>
@@ -653,10 +655,17 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
                     </label>
                     <input
                       type="text"
+                      list="santriKelasList"
                       value={formData.kelasSaatIni}
                       onChange={(e) => setFormData({ ...formData, kelasSaatIni: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold"
+                      placeholder="e.g. 7 MTS PUTRA & PUTRI"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold uppercase"
                     />
+                    <datalist id="santriKelasList">
+                      {KELAS_OPTIONS.map((k) => (
+                        <option key={k} value={k} />
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">

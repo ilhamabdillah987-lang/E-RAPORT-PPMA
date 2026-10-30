@@ -83,7 +83,7 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
       ])
     ).filter(Boolean);
 
-    // Sort: classes that have students come first
+    // Sort: classes that have students come first, then by official grade hierarchy
     return combined.sort((a, b) => {
       const countA = santriList.filter(
         (s) => (s.kelasSaatIni || '').trim().toLowerCase() === a.toLowerCase()
@@ -93,6 +93,11 @@ export const InputNilaiView: React.FC<InputNilaiViewProps> = ({
       ).length;
       if (countA > 0 && countB === 0) return -1;
       if (countB > 0 && countA === 0) return 1;
+      const idxA = KELAS_OPTIONS.indexOf(a);
+      const idxB = KELAS_OPTIONS.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
       return a.localeCompare(b);
     });
   }, [santriList, settings.namaKelas]);

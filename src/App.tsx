@@ -82,17 +82,30 @@ export default function App() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((u) => {
             if (!u) return u;
+            let updated = u;
             if (
               u.fullName === 'Ustadz H. Ahmad Fauzi, S.Pd.I.' ||
               u.namaLengkap === 'Ustadz H. Ahmad Fauzi, S.Pd.I.'
             ) {
-              return {
-                ...u,
+              updated = {
+                ...updated,
                 fullName: 'Wali Kelas',
                 namaLengkap: '',
               };
             }
-            return u;
+            if (updated.assignedClass && /\bMA\b/i.test(updated.assignedClass)) {
+              updated = {
+                ...updated,
+                assignedClass: updated.assignedClass.replace(/\bMA\b/gi, 'SMA'),
+              };
+            }
+            if (updated.kelasAkses && /\bMA\b/i.test(updated.kelasAkses)) {
+              updated = {
+                ...updated,
+                kelasAkses: updated.kelasAkses.replace(/\bMA\b/gi, 'SMA'),
+              };
+            }
+            return updated;
           });
         }
       }
@@ -124,6 +137,9 @@ export default function App() {
           if (merged.logoUrl === '/logo-alhikmah.svg' || merged.logoUrl?.includes('viewBox="0 0 120 120"')) {
             merged.logoUrl = '';
           }
+          if (merged.namaKelas && /\bMA\b/i.test(merged.namaKelas)) {
+            merged.namaKelas = merged.namaKelas.replace(/\bMA\b/gi, 'SMA');
+          }
           return merged;
         }
       }
@@ -141,9 +157,18 @@ export default function App() {
         if (Array.isArray(parsed)) {
           const sampleIds = ['santri-1', 'santri-2', 'santri-3', 'santri-4'];
           const sampleNames = ['wGW', 'Muhammad Zaidan Al-Fatih', 'Ahmad Faris Hidayat', 'Bilal Ramadhan'];
-          return parsed.filter(
-            (s) => s && !sampleIds.includes(s.id) && !sampleNames.includes(s.namaLengkap)
-          );
+          return parsed
+            .filter((s) => s && !sampleIds.includes(s.id) && !sampleNames.includes(s.namaLengkap))
+            .map((s) => {
+              let updated = { ...s };
+              if (updated.kelasSaatIni && /\bMA\b/i.test(updated.kelasSaatIni)) {
+                updated.kelasSaatIni = updated.kelasSaatIni.replace(/\bMA\b/gi, 'SMA');
+              }
+              if (updated.diterimaKelas && /\bMA\b/i.test(updated.diterimaKelas)) {
+                updated.diterimaKelas = updated.diterimaKelas.replace(/\bMA\b/gi, 'SMA');
+              }
+              return updated;
+            });
         }
       }
     } catch (e) {

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AppUser, RaportSettings, MataPelajaran } from '../types';
-import { DEFAULT_MAPEL } from '../data/defaultData';
+import { DEFAULT_MAPEL, KELAS_OPTIONS } from '../data/defaultData';
 import {
   UserPlus,
   Users,
@@ -43,20 +43,6 @@ interface UserManagementViewProps {
   onSetActiveWaliKelas?: (user: AppUser) => void;
 }
 
-const KELAS_OPTIONS = [
-  '7 MTS PUTRA',
-  '7 MTS PUTRI',
-  '8 MTS PUTRA',
-  '8 MTS PUTRI',
-  '9 MTS PUTRA',
-  '9 MTS PUTRI',
-  '10 MA PUTRA',
-  '10 MA PUTRI',
-  '11 MA PUTRA',
-  '11 MA PUTRI',
-  '12 MA PUTRA',
-  '12 MA PUTRI',
-];
 
 export const UserManagementView: React.FC<UserManagementViewProps> = ({
   users,
@@ -906,11 +892,15 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
               {/* JIKA WALI KELAS */}
               {editingUser.role === 'walikelas' && (
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    Kelas Binaan (Akses Kelas)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700 uppercase">
+                      Kelas Binaan (Akses Kelas)
+                    </label>
+                    <span className="text-[10px] text-slate-400">Pilih dari daftar atau ketik baru</span>
+                  </div>
                   <input
                     type="text"
+                    list="userKelasOptionsList"
                     required
                     value={editingUser.kelasAkses || editingUser.assignedClass || ''}
                     onChange={(e) =>
@@ -920,9 +910,14 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                         assignedClass: e.target.value,
                       })
                     }
-                    placeholder="e.g. 7 MTS PUTRA"
+                    placeholder="e.g. 7 MTS PUTRA & PUTRI"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white uppercase"
                   />
+                  <datalist id="userKelasOptionsList">
+                    {KELAS_OPTIONS.map((k) => (
+                      <option key={k} value={k} />
+                    ))}
+                  </datalist>
                 </div>
               )}
 

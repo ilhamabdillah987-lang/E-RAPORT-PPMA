@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Santri, RaportSettings, MataPelajaran, NilaiSantri } from '../types';
+import { KELAS_OPTIONS } from '../data/defaultData';
 import { calculateSantriRerata } from '../utils/helpers';
 import { CheckCircle2, UserCheck, GraduationCap, ArrowUpRight, AlertCircle, ShieldAlert } from 'lucide-react';
 
@@ -143,11 +144,17 @@ export const KenaikanKelulusanView: React.FC<KenaikanKelulusanViewProps> = ({
               </label>
               <input
                 type="text"
+                list="targetKelasOptionsList"
                 value={targetKelas}
                 onChange={(e) => setTargetKelas(e.target.value)}
-                placeholder="e.g. 8 MTS PUTRA"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
+                placeholder="e.g. 8 MTS PUTRA & PUTRI"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white uppercase"
               />
+              <datalist id="targetKelasOptionsList">
+                {KELAS_OPTIONS.map((k) => (
+                  <option key={k} value={k} />
+                ))}
+              </datalist>
             </div>
           ) : (
             <div>
