@@ -209,7 +209,7 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
             <Smartphone className="w-4 h-4" />
           </div>
           <span className="leading-tight">
-            Setelah pendaftaran Google ini, buatlah <strong>Username & Password Anda sendiri</strong> agar dapat login di <strong>device manapun</strong> (HP, Laptop, PC).
+            Setelah pendaftaran ini, buatlah <strong>Username & Password Anda sendiri</strong> agar dapat login di <strong>device manapun</strong> (HP, Laptop, PC), meski akun Google di perangkat lain tersebut berbeda.
           </span>
         </div>
 

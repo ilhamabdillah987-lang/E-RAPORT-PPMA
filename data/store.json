@@ -1,0 +1,62 @@
+{
+  "users": [
+    {
+      "id": "user-admin",
+      "username": "admin",
+      "password": "alhikmah123",
+      "fullName": "Administrator Pesantren",
+      "namaLengkap": "Administrator Pesantren",
+      "role": "admin",
+      "createdAt": "2025-07-01"
+    },
+    {
+      "id": "user-walikelas",
+      "username": "walikelas7",
+      "password": "guru123",
+      "fullName": "Wali Kelas",
+      "namaLengkap": "",
+      "role": "walikelas",
+      "assignedClass": "7 MTS PUTRA",
+      "kelasAkses": "7 MTS PUTRA",
+      "createdAt": "2025-07-01"
+    },
+    {
+      "id": "user-guru",
+      "username": "guru",
+      "password": "guru123",
+      "fullName": "Ustadz Pengajar",
+      "namaLengkap": "Ustadz Pengajar",
+      "role": "guru",
+      "assignedClass": "Semua Kelas",
+      "kelasAkses": "Semua Kelas",
+      "assignedMapelIds": [
+        "ar-1",
+        "ar-3"
+      ],
+      "mapelAkses": [
+        "Asasul Mubtadiin Fi Ilmi Nahwi",
+        "Asasul Mubtadiin Fi Ilmi Shorfi"
+      ],
+      "createdAt": "2025-07-01"
+    }
+  ],
+  "settings": {
+    "namaYayasan": "YAYASAN PENDIDIKAN ISLAM AL-HIKMAH",
+    "namaPesantren": "PONDOK PESANTREN MODERN AL-HIKMAH",
+    "alamatPesantren": "Jl. Al-Hikmah Kp. Pondok Jaya RT.05/01 Desa Pondok Jaya Kecamatan Sepatan Kabupaten Tangerang Provinsi Banten",
+    "namaKelas": "7 MTS PUTRA",
+    "semester": "GANJIL",
+    "tahunPelajaran": "2025/2026",
+    "kotaCetak": "Tangerang",
+    "tanggalCetak": "20 Desember 2025",
+    "namaWaliKelas": "",
+    "nipWaliKelas": "",
+    "namaKepalaKepesantrenan": "",
+    "tanggalKenaikanKelulusan": "25 Juni 2026",
+    "logoUrl": "",
+    "googleSheetWebAppUrl": ""
+  },
+  "santriList": [],
+  "nilaiMap": {},
+  "lastUpdated": "2026-10-30T06:16:44.343Z"
+}

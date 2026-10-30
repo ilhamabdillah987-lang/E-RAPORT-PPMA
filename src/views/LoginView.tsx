@@ -167,7 +167,18 @@ export const LoginView: React.FC<LoginViewProps> = ({
         return;
       }
 
-      // If user does not exist yet (or explicit registration requested):
+      // If user does not exist yet and tried to log in (e.g. Device has a different Google account):
+      if (!existingUser && mode === 'masuk') {
+        setGoogleNotice({
+          type: 'info',
+          text: `Akun Google (${gUser.email}) ini belum terdaftar di sistem. Jika Anda sudah membuat Akun Wali Kelas / Guru di perangkat lain, silakan langsung masukkan Username & Password Anda pada form di bawah (meski perangkat ini memakai akun Google berbeda). Atau klik "Daftar Akun Google" jika ingin mendaftarkan akun ini.`,
+        });
+        const userInput = document.getElementById('login-username-input');
+        if (userInput) userInput.focus();
+        return;
+      }
+
+      // If explicit registration requested:
       setGoogleProfileForReg(profile);
       setIsGoogleRegModalOpen(true);
     } catch (err: any) {
@@ -211,32 +222,47 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
 
     // 2. Save to local storage & cloud sync
+    const cleanList = allUsers.filter(
+      (u) =>
+        u.username.trim().toLowerCase() !== newUser.username.trim().toLowerCase() &&
+        u.id !== newUser.id
+    );
+    const next = [...cleanList, newUser];
+    setServerUsers(next);
     try {
-      const next = [...allUsers, newUser];
-      setServerUsers(next);
       localStorage.setItem('alhikmah_users', JSON.stringify(next));
       await saveSharedUsers(next);
     } catch (e) {}
 
-    // 3. Save to Firebase Firestore /users/{uid} for cross-device persistence
+    // 3. Save to backend server dedicated endpoints (/api/auth/register & /api/users)
+    try {
+      await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser),
+      });
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser),
+      });
+      await fetch('/api/users/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users: next }),
+      });
+    } catch (e) {}
+
+    // 4. Save to Firebase Firestore /users/{uid} for cross-device persistence
     try {
       await saveUserToFirestore(newUser);
     } catch (fsErr) {
       console.warn('Firestore user save notice:', fsErr);
     }
 
-    // 4. Post to backend server (/api/users)
-    try {
-      await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser),
-      });
-    } catch (e) {}
-
     setGoogleNotice({
       type: 'success',
-      text: `Pendaftaran Berhasil! Akun "${newUser.username}" aktif. Anda kini dapat login di perangkat (device) manapun menggunakan Username & Password Anda, ataupun lewat Akun Google.`,
+      text: `Pendaftaran Berhasil! Username "${newUser.username}" dan Password Anda telah aktif di server. Anda dapat login di HP, Laptop, atau komputer manapun dengan Username & Password ini, meski akun Google di perangkat tersebut berbeda.`,
     });
 
     setTimeout(() => {
@@ -317,10 +343,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   }, [allUsers]);
 
   const handleSelectUser = (user: AppUser) => {
-    if (user.authProvider === 'google') {
-      onLogin(user);
-      return;
-    }
     setUsername(user.username);
     setPassword('');
     setError('');
@@ -620,10 +642,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
               <School className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
               <div className="text-xs text-emerald-900 leading-relaxed">
-                <p className="font-bold text-emerald-950">Portal Masuk Wali Kelas</p>
-                <p className="text-[11px] text-emerald-800 mt-0.5">
-                  Masukkan <strong>Username</strong> dan <strong>Password</strong> yang telah
-                  dibuatkan oleh Admin Pesantren untuk menginput nilai dan mencetak raport kelas Anda.
+                <p className="font-bold text-emerald-950 flex items-center gap-1.5">
+                  <span>Portal Masuk Wali Kelas</span>
+                  <span className="px-2 py-0.2 bg-emerald-200/80 text-emerald-900 text-[10px] font-black rounded-full">
+                    Akses Semua Device
+                  </span>
+                </p>
+                <p className="text-[11px] text-emerald-800 mt-1">
+                  Masukkan <strong>Username</strong> dan <strong>Password</strong> yang telah Anda buat saat mendaftar. Anda dapat login di <strong>HP, Laptop, atau PC manapun</strong>, meskipun akun Google yang aktif di perangkat tersebut berbeda.
                 </p>
               </div>
             </div>
@@ -801,13 +827,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
                           e.stopPropagation();
                           handleSelectUser(g);
                         }}
-                        className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 shrink-0 ${
-                          g.authProvider === 'google'
-                            ? 'text-white bg-blue-700 hover:bg-blue-800 border-blue-700 shadow-xs'
-                            : 'text-blue-700 group-hover:text-blue-900 bg-white group-hover:bg-blue-100/80 border-slate-200 group-hover:border-blue-300'
-                        }`}
+                        className="text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1 shrink-0 text-blue-700 hover:text-blue-900 bg-white hover:bg-blue-100/80 border-slate-200 hover:border-blue-300"
+                        title="Pilih akun ini dan isi username secara otomatis"
                       >
-                        {g.authProvider === 'google' ? 'Masuk' : 'Pilih'}
+                        Pilih
                         <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
@@ -824,7 +847,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               )}
 
               <p className="text-[10px] text-slate-400 mt-2.5 text-center">
-                💡 Klik tombol <strong>"Masuk"</strong> pada akun Google Anda atau <strong>"Pilih"</strong> untuk mengisi username otomatis.
+                💡 Klik tombol <strong>"Pilih"</strong> pada nama akun Anda untuk mengisi username otomatis, lalu masukkan password Anda.
               </p>
             </div>
           )}
@@ -895,13 +918,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
                           e.stopPropagation();
                           handleSelectUser(w);
                         }}
-                        className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 shrink-0 ${
-                          w.authProvider === 'google'
-                            ? 'text-white bg-emerald-700 hover:bg-emerald-800 border-emerald-700 shadow-xs'
-                            : 'text-emerald-700 group-hover:text-emerald-900 bg-white group-hover:bg-emerald-100/80 border-slate-200 group-hover:border-emerald-300'
-                        }`}
+                        className="text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1 shrink-0 text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-100/80 border-slate-200 hover:border-emerald-300"
+                        title="Pilih akun ini dan isi username secara otomatis"
                       >
-                        {w.authProvider === 'google' ? 'Masuk' : 'Pilih'}
+                        Pilih
                         <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
@@ -918,7 +938,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               )}
 
               <p className="text-[10px] text-slate-400 mt-2.5 text-center">
-                💡 Klik tombol <strong>"Masuk"</strong> pada akun Google Anda atau <strong>"Pilih"</strong> untuk mengisi username otomatis.
+                💡 Klik tombol <strong>"Pilih"</strong> pada nama akun Anda untuk mengisi username otomatis, lalu masukkan password Anda.
               </p>
             </div>
           )}

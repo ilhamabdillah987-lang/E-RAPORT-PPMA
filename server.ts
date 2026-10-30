@@ -135,6 +135,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Auth Login Route - Centralized verification across all devices & accounts
+// Works regardless of which Google account is active on the client browser/device
 app.post('/api/auth/login', (req, res) => {
   try {
     const { username, password } = req.body || {};
@@ -144,19 +145,34 @@ app.post('/api/auth/login', (req, res) => {
     const cleanUser = String(username).trim().toLowerCase();
     const cleanPass = String(password).trim();
 
-    const user = currentStore.users.find(
-      (u) => (u.username || '').trim().toLowerCase() === cleanUser
-    );
+    // Reload store from disk if available to guarantee freshest data across instances
+    try {
+      if (fs.existsSync(STORE_FILE)) {
+        const fileData = fs.readFileSync(STORE_FILE, 'utf-8');
+        const parsed = JSON.parse(fileData);
+        if (parsed && Array.isArray(parsed.users) && parsed.users.length > 0) {
+          currentStore.users = parsed.users;
+        }
+      }
+    } catch (e) {}
+
+    // Match by username OR email (case-insensitive)
+    const user = currentStore.users.find((u) => {
+      const uName = (u.username || '').trim().toLowerCase();
+      const uEmail = (u.email || '').trim().toLowerCase();
+      return uName === cleanUser || (cleanUser.includes('@') && uEmail === cleanUser);
+    });
 
     if (!user) {
       return res.status(404).json({
         success: false,
         code: 'USER_NOT_FOUND',
-        message: `Username "${username.trim()}" tidak ditemukan. Pastikan username sudah dibuat oleh Admin.`,
+        message: `Username atau email "${username.trim()}" tidak ditemukan. Pastikan akun sudah dibuat atau didaftarkan.`,
       });
     }
 
-    if (user.password !== password && (user.password || '').trim() !== cleanPass) {
+    const expectedPass = String(user.password || '').trim();
+    if (expectedPass && expectedPass !== '-' && expectedPass !== cleanPass && user.password !== password) {
       return res.status(401).json({
         success: false,
         code: 'INVALID_PASSWORD',
@@ -170,16 +186,90 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
+// Dedicated Registration Route for Wali Kelas / Guru (Universal cross-device setup)
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const {
+      username,
+      password,
+      fullName,
+      namaLengkap,
+      role = 'walikelas',
+      assignedClass,
+      kelasAkses,
+      assignedMapelIds,
+      mapelAkses,
+      nip,
+      email,
+      photoUrl,
+      googleUid,
+      authProvider = 'google',
+    } = req.body || {};
+
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: 'Username dan password wajib diisi' });
+    }
+
+    const cleanUsername = String(username).trim().toLowerCase();
+    const cleanPassword = String(password).trim();
+    const displayName = String(namaLengkap || fullName || username).trim();
+
+    const existingIdx = currentStore.users.findIndex(
+      (u) => (u.username || '').trim().toLowerCase() === cleanUsername
+    );
+
+    const newUser: any = {
+      id: req.body?.id || `user-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      username: cleanUsername,
+      password: cleanPassword,
+      fullName: displayName,
+      namaLengkap: displayName,
+      role,
+      assignedClass: assignedClass || kelasAkses || (role === 'walikelas' ? '7 MTS PUTRA' : 'Semua Kelas'),
+      kelasAkses: kelasAkses || assignedClass || (role === 'walikelas' ? '7 MTS PUTRA' : 'Semua Kelas'),
+      assignedMapelIds: assignedMapelIds || [],
+      mapelAkses: mapelAkses || [],
+      nip: nip || '',
+      email: email || '',
+      photoUrl: photoUrl || '',
+      googleUid: googleUid || '',
+      authProvider: authProvider || 'credentials',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (existingIdx >= 0) {
+      currentStore.users[existingIdx] = { ...currentStore.users[existingIdx], ...newUser };
+    } else {
+      currentStore.users.push(newUser);
+    }
+
+    saveStore(currentStore);
+    res.json({ success: true, user: newUser, allUsers: currentStore.users });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Bidirectional User Sync - Merges client accounts with server accounts
 app.post('/api/users/sync', (req, res) => {
   try {
-    const clientUsers = req.body?.users;
-    if (Array.isArray(clientUsers) && clientUsers.length > 0) {
-      clientUsers.forEach((clientUser) => {
+    const clientUsers = Array.isArray(req.body)
+      ? req.body
+      : Array.isArray(req.body?.users)
+      ? req.body.users
+      : req.body?.user
+      ? [req.body.user]
+      : [];
+
+    if (clientUsers.length > 0) {
+      clientUsers.forEach((clientUser: any) => {
         if (!clientUser || !clientUser.username) return;
-        const cleanUser = clientUser.username.trim().toLowerCase();
+        const cleanUser = String(clientUser.username).trim().toLowerCase();
         const existingIdx = currentStore.users.findIndex(
-          (u) => (u.username || '').trim().toLowerCase() === cleanUser || u.id === clientUser.id
+          (u) =>
+            (u.username || '').trim().toLowerCase() === cleanUser ||
+            (u.id && clientUser.id && u.id === clientUser.id)
         );
         if (existingIdx >= 0) {
           currentStore.users[existingIdx] = { ...currentStore.users[existingIdx], ...clientUser };
@@ -200,28 +290,47 @@ app.get('/api/users', (req, res) => {
   res.json(currentStore.users);
 });
 
-// 2. Add new user (Called when Admin creates a user)
+// 2. Add / Upsert user (Supports single user object, { user: ... }, { users: [...] }, or raw array)
 app.post('/api/users', (req, res) => {
   try {
-    const newUser = req.body;
-    if (!newUser || !newUser.username) {
-      return res.status(400).json({ error: 'Username wajib diisi' });
+    const body = req.body;
+    let listToAdd: any[] = [];
+
+    if (Array.isArray(body)) {
+      listToAdd = body;
+    } else if (Array.isArray(body?.users)) {
+      listToAdd = body.users;
+    } else if (body?.user && typeof body.user === 'object') {
+      listToAdd = [body.user];
+    } else if (body && body.username) {
+      listToAdd = [body];
     }
 
-    const cleanUsername = newUser.username.trim().toLowerCase();
-    const existingIndex = currentStore.users.findIndex(
-      (u) => (u.username || '').trim().toLowerCase() === cleanUsername
-    );
-
-    if (existingIndex >= 0) {
-      // Update existing if ID matches or replace
-      currentStore.users[existingIndex] = { ...currentStore.users[existingIndex], ...newUser };
-    } else {
-      currentStore.users.push(newUser);
+    if (listToAdd.length === 0) {
+      return res.status(400).json({ error: 'Data user tidak valid atau username kosong' });
     }
+
+    let lastSavedUser: any = null;
+    listToAdd.forEach((newUser) => {
+      if (!newUser || !newUser.username) return;
+      const cleanUsername = String(newUser.username).trim().toLowerCase();
+      const existingIndex = currentStore.users.findIndex(
+        (u) =>
+          (u.username || '').trim().toLowerCase() === cleanUsername ||
+          (u.id && newUser.id && u.id === newUser.id)
+      );
+
+      if (existingIndex >= 0) {
+        currentStore.users[existingIndex] = { ...currentStore.users[existingIndex], ...newUser };
+        lastSavedUser = currentStore.users[existingIndex];
+      } else {
+        currentStore.users.push(newUser);
+        lastSavedUser = newUser;
+      }
+    });
 
     saveStore(currentStore);
-    res.json({ success: true, user: newUser, allUsers: currentStore.users });
+    res.json({ success: true, user: lastSavedUser, count: listToAdd.length, allUsers: currentStore.users });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

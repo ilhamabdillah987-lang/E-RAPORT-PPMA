@@ -54,19 +54,36 @@ export async function fetchSharedUsers(): Promise<AppUser[]> {
     console.warn('Error reading local users:', e);
   }
 
-  // 1. Check URL for Instant Sync Token (#sync=... or ?sync=...)
+  // 1. Fetch from Express /api/users first (authoritative server database for all devices)
+  try {
+    const apiRes = await fetch('/api/users');
+    if (apiRes.ok) {
+      const apiUsers = await apiRes.json();
+      if (Array.isArray(apiUsers) && apiUsers.length > 0) {
+        const merged = mergeUsers(apiUsers, localUsers);
+        try {
+          localStorage.setItem('alhikmah_users', JSON.stringify(merged));
+        } catch (e) {}
+        return merged;
+      }
+    }
+  } catch (e) {
+    // Server offline or fallback
+  }
+
+  // 2. Check URL for Instant Sync Token (#sync=... or ?sync=...)
   const urlSyncResult = syncFromUrlHash();
   if (urlSyncResult && urlSyncResult.users && urlSyncResult.users.length > 0) {
     const merged = mergeUsers(urlSyncResult.users, localUsers);
     try {
       localStorage.setItem('alhikmah_users', JSON.stringify(merged));
     } catch (e) {}
-    // Also push to cloud relay so everyone else gets them too
+    // Also push to server & cloud relay so everyone else gets them too
     saveSharedUsers(merged).catch(() => {});
     return merged;
   }
 
-  // 2. Fetch from Cloud Relay (works on Vercel, localhost, mobile, etc.)
+  // 3. Fetch from Cloud Relay (works across separate preview environments)
   try {
     const cloudRes = await fetch(`${CLOUD_API_BASE}/${CLOUD_OBJECT_ID}`, {
       method: 'GET',
@@ -88,29 +105,12 @@ export async function fetchSharedUsers(): Promise<AppUser[]> {
     console.warn('Cloud relay fetch warning:', err);
   }
 
-  // 3. Fetch from Express / Vercel Serverless /api/users
-  try {
-    const apiRes = await fetch('/api/users');
-    if (apiRes.ok) {
-      const apiUsers = await apiRes.json();
-      if (Array.isArray(apiUsers) && apiUsers.length > 0) {
-        const merged = mergeUsers(apiUsers, localUsers);
-        try {
-          localStorage.setItem('alhikmah_users', JSON.stringify(merged));
-        } catch (e) {}
-        return merged;
-      }
-    }
-  } catch (e) {
-    // Expected on static Vercel if /api/users is not deployed as serverless
-  }
-
   // 4. Return local or default
   return localUsers.length > 0 ? localUsers : DEFAULT_USERS;
 }
 
 /**
- * Save users to Cloud Relay, LocalStorage, Express server, and Google Sheet Web App
+ * Save users to Express server, Cloud Relay, LocalStorage, and Google Sheet Web App
  */
 export async function saveSharedUsers(users: AppUser[]): Promise<boolean> {
   // 1. LocalStorage
@@ -118,9 +118,31 @@ export async function saveSharedUsers(users: AppUser[]): Promise<boolean> {
     localStorage.setItem('alhikmah_users', JSON.stringify(users));
   } catch (e) {}
 
+  let serverSuccess = false;
+
+  // 2. Save to Express server (/api/users and /api/users/sync)
+  try {
+    const srvRes = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ users }),
+    });
+    if (srvRes.ok) {
+      serverSuccess = true;
+    }
+  } catch (e) {}
+
+  try {
+    await fetch('/api/users/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ users }),
+    });
+  } catch (e) {}
+
   let cloudSuccess = false;
 
-  // 2. Save to Cloud Relay
+  // 3. Save to Cloud Relay
   try {
     const payload = {
       name: 'alhikmah_users_prod',
@@ -145,15 +167,6 @@ export async function saveSharedUsers(users: AppUser[]): Promise<boolean> {
     console.warn('Could not save to cloud relay:', err);
   }
 
-  // 3. Save to Express server (/api/users)
-  try {
-    await fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ users }),
-    });
-  } catch (e) {}
-
   // 4. If Google Sheet Web App URL is configured, save there too
   try {
     const gasUrl = localStorage.getItem('alhikmah_gas_url');
@@ -167,7 +180,7 @@ export async function saveSharedUsers(users: AppUser[]): Promise<boolean> {
     }
   } catch (e) {}
 
-  return cloudSuccess;
+  return serverSuccess || cloudSuccess;
 }
 
 /**
