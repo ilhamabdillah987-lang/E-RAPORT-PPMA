@@ -87,7 +87,7 @@ export const SettingRaportView: React.FC<SettingRaportViewProps> = ({
                 required
                 value={formData.namaKelas}
                 onChange={(e) => setFormData({ ...formData, namaKelas: e.target.value })}
-                placeholder="e.g. 7 MTS PUTRA & PUTRI"
+                placeholder="e.g. 7 SMP / 7 MTS PUTRA & PUTRI"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white uppercase"
               />
               <datalist id="settingKelasList">

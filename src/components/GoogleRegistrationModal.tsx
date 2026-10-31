@@ -558,12 +558,30 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
                   onChange={(e) => setKelasAkses(e.target.value)}
                   className="px-3 py-2.5 bg-white border border-emerald-300 rounded-xl font-bold text-slate-800 text-xs"
                 >
-                  {KELAS_OPTIONS.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                  <option value="LAINNYA">+ Ketik Kelas Lain...</option>
+                  <optgroup label="── Jenjang SMP ──">
+                    {KELAS_OPTIONS.filter((k) => k.includes('SMP')).map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="── Jenjang MTs ──">
+                    {KELAS_OPTIONS.filter((k) => k.includes('MTS')).map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="── Jenjang SMA ──">
+                    {KELAS_OPTIONS.filter((k) => k.includes('SMA')).map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="── Opsi Lainnya ──">
+                    <option value="LAINNYA">+ Ketik Kelas Lain...</option>
+                  </optgroup>
                 </select>
 
                 {kelasAkses === 'LAINNYA' ? (

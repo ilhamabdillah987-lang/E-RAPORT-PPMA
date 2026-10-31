@@ -119,6 +119,18 @@ export const DEFAULT_SANTRI_LIST = DEFAULT_SANTRI;
 export const DEFAULT_NILAI_MAP = INITIAL_NILAI;
 
 export const KELAS_OPTIONS = [
+  // Jenjang SMP (Sekolah Menengah Pertama)
+  '7 SMP PUTRA',
+  '7 SMP PUTRI',
+  '7 SMP PUTRA & PUTRI',
+  '8 SMP PUTRA',
+  '8 SMP PUTRI',
+  '8 SMP PUTRA & PUTRI',
+  '9 SMP PUTRA',
+  '9 SMP PUTRI',
+  '9 SMP PUTRA & PUTRI',
+
+  // Jenjang MTs (Madrasah Tsanawiyah)
   '7 MTS PUTRA',
   '7 MTS PUTRI',
   '7 MTS PUTRA & PUTRI',
@@ -128,6 +140,8 @@ export const KELAS_OPTIONS = [
   '9 MTS PUTRA',
   '9 MTS PUTRI',
   '9 MTS PUTRA & PUTRI',
+
+  // Jenjang SMA (Sekolah Menengah Atas)
   '10 SMA PUTRA',
   '10 SMA PUTRI',
   '10 SMA PUTRA & PUTRI',

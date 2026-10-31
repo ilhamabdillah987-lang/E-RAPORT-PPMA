@@ -517,7 +517,7 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
                       list="santriKelasList"
                       value={formData.diterimaKelas}
                       onChange={(e) => setFormData({ ...formData, diterimaKelas: e.target.value })}
-                      placeholder="e.g. 7 MTS PUTRA & PUTRI"
+                      placeholder="e.g. 7 SMP / 7 MTS PUTRA & PUTRI"
                       className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl uppercase font-semibold"
                     />
                   </div>
@@ -704,7 +704,7 @@ export const IdentitasSantriView: React.FC<IdentitasSantriViewProps> = ({
                       list="santriKelasList"
                       value={formData.kelasSaatIni}
                       onChange={(e) => setFormData({ ...formData, kelasSaatIni: e.target.value })}
-                      placeholder="e.g. 7 MTS PUTRA & PUTRI"
+                      placeholder="e.g. 7 SMP / 7 MTS PUTRA & PUTRI"
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold uppercase"
                     />
                     <datalist id="santriKelasList">

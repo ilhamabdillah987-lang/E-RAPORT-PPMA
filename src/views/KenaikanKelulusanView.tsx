@@ -147,7 +147,7 @@ export const KenaikanKelulusanView: React.FC<KenaikanKelulusanViewProps> = ({
                 list="targetKelasOptionsList"
                 value={targetKelas}
                 onChange={(e) => setTargetKelas(e.target.value)}
-                placeholder="e.g. 8 MTS PUTRA & PUTRI"
+                placeholder="e.g. 8 SMP / 8 MTS PUTRA & PUTRI"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white uppercase"
               />
               <datalist id="targetKelasOptionsList">
