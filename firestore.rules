@@ -6,6 +6,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'ilhamabdillah987@gmail.com' ||
+        (request.auth.token.email != null && request.auth.token.email.matches('.*admin.*')) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -18,27 +31,35 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
+    // User profiles for authenticated users
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || request.auth.token.email == 'ilhamabdillah987@gmail.com');
-      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || request.auth.token.email == 'ilhamabdillah987@gmail.com');
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn();
 
       allow create: if isSignedIn()
         && isValidId(userId)
         && request.auth.uid == userId
-        && incoming().uid == request.auth.uid
-        && incoming().username is string && incoming().username.size() >= 3 && incoming().username.size() <= 64
-        && incoming().fullName is string && incoming().fullName.size() <= 150
-        && incoming().role in ['admin', 'walikelas', 'guru'];
+        && incoming().uid == request.auth.uid;
 
-      allow update: if isSignedIn()
-        && isValidId(userId)
-        && request.auth.uid == userId
-        && incoming().uid == existing().uid
-        && incoming().diff(existing()).affectedKeys().hasOnly(['password', 'username', 'fullName', 'assignedClass', 'kelasAkses', 'assignedMapelIds', 'mapelAkses', 'nip', 'updatedAt']);
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && incoming().uid == existing().uid) ||
+        isAdmin()
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // School data (santri, nilai, settings, mapel)
+    match /school_data/{dataType} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Audit logs for data changes
+    match /audit_logs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
   }
 }

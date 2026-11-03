@@ -2,7 +2,7 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile and credentials for Wali Kelas and Guru with Google Account linkage",
+      "description": "User profile and credentials for Wali Kelas, Guru, and Admin with Google Account linkage",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "maxLength": 128 },
@@ -10,21 +10,59 @@
         "password": { "type": "string", "maxLength": 128 },
         "fullName": { "type": "string", "maxLength": 150 },
         "email": { "type": "string", "maxLength": 120 },
+        "photoUrl": { "type": "string", "maxLength": 500 },
         "role": { "type": "string", "enum": ["admin", "walikelas", "guru"] },
+        "status": { "type": "string", "enum": ["active", "suspended", "pending"] },
         "assignedClass": { "type": "string", "maxLength": 80 },
         "kelasAkses": { "type": "string", "maxLength": 80 },
+        "assignedMapelIds": { "type": "array", "items": { "type": "string" } },
+        "mapelAkses": { "type": "array", "items": { "type": "string" } },
         "nip": { "type": "string", "maxLength": 40 },
         "authProvider": { "type": "string", "maxLength": 20 },
         "createdAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
-      "required": ["uid", "username", "role", "fullName", "createdAt"]
+      "required": ["uid", "fullName", "email", "role", "createdAt"]
+    },
+    "SchoolData": {
+      "title": "SchoolData",
+      "description": "Shared online application data including santri, nilai, settings, and curriculum",
+      "type": "object",
+      "properties": {
+        "dataType": { "type": "string", "enum": ["santri", "nilai", "settings", "mapel"] },
+        "data": { "type": "object" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["dataType", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "History of changes for auditability across devices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["action", "performedBy", "timestamp"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "Registered user accounts for cross-device authentication"
+      "description": "User profiles authenticated via Firebase Auth & Google Sign-In"
+    },
+    "/school_data/{dataType}": {
+      "schema": "SchoolData",
+      "description": "Online cloud database for Santri, Nilai, Settings, and Mapel"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Change history and sync records"
     }
   }
 }

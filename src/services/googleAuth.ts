@@ -13,9 +13,10 @@ import {
   setDoc,
   getDoc,
   getDocFromServer,
+  updateDoc,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { AppUser } from '../types';
+import { AppUser, UserRole } from '../types';
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
@@ -87,14 +88,19 @@ export function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Provider with workspace scopes
-const provider = new GoogleAuthProvider();
-provider.addScope('https://www.googleapis.com/auth/drive.file');
-provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+// Google Auth Provider
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+});
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
 
-// Cache access token in memory (never localStorage)
 let cachedAccessToken: string | null = null;
-let isSigningIn = false;
+
+export const getCachedAccessToken = (): string | null => {
+  return cachedAccessToken;
+};
 
 export const initGoogleAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
@@ -104,7 +110,7 @@ export const initGoogleAuth = (
     if (user && cachedAccessToken) {
       if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
     } else {
-      if (!isSigningIn) {
+      if (!user) {
         cachedAccessToken = null;
         if (onAuthFailure) onAuthFailure();
       }
@@ -112,34 +118,157 @@ export const initGoogleAuth = (
   });
 };
 
-export const signInWithGoogle = async (): Promise<{ user: User; accessToken: string }> => {
+/**
+ * Sign in or Register using official Firebase Google Sign-In with popup.
+ * 1. Shows available Google accounts for user to choose.
+ * 2. If user exists in Firestore, logs them in immediately.
+ * 3. If new user, creates their profile in Firestore automatically.
+ * 4. Ensures 1 Google Account has exactly 1 profile tied to its Firebase UID.
+ */
+export async function signInOrRegisterWithGoogle(preferredRole: 'walikelas' | 'guru' = 'walikelas'): Promise<{
+  appUser: AppUser;
+  isNewUser: boolean;
+}> {
   try {
-    isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, googleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      // Fallback token placeholder if not directly provided by popup
-      cachedAccessToken = 'google-auth-verified';
-    } else {
-      cachedAccessToken = credential.accessToken;
+    cachedAccessToken = credential?.accessToken || 'google-auth-verified';
+
+    const gUser = result.user;
+    const uid = gUser.uid;
+    const email = gUser.email || '';
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanUsername = cleanEmail ? cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9_.-]/g, '') : `user_${uid.slice(0, 6)}`;
+    const displayName = gUser.displayName || cleanUsername || 'Pengguna Google';
+    const photoUrl = gUser.photoURL || '';
+
+    // Check if user already exists in Firestore
+    const existing = await fetchUserFromFirestore(uid);
+
+    if (existing) {
+      // User already registered - update lastLoginAt
+      const now = new Date().toISOString();
+      try {
+        await updateDoc(doc(db, 'users', uid), {
+          lastLoginAt: now,
+          photoUrl: photoUrl || existing.photoUrl || '',
+          updatedAt: now,
+        });
+      } catch (e) {
+        // Fallback update
+      }
+
+      const updatedUser: AppUser = {
+        ...existing,
+        lastLoginAt: now,
+        photoUrl: photoUrl || existing.photoUrl,
+      };
+
+      return { appUser: updatedUser, isNewUser: false };
     }
-    return { user: result.user, accessToken: cachedAccessToken };
+
+    // Determine initial role: admin if matching master email, else user's preferred role
+    const isAdmin = cleanEmail === 'ilhamabdillah987@gmail.com';
+    const role: UserRole = isAdmin ? 'admin' : preferredRole;
+    const now = new Date().toISOString();
+
+    const newUser: AppUser = {
+      id: uid,
+      googleUid: uid,
+      username: cleanUsername,
+      fullName: displayName,
+      namaLengkap: displayName,
+      email: cleanEmail,
+      photoUrl,
+      role,
+      status: 'active',
+      assignedClass: role === 'walikelas' ? '7 MTS PUTRA' : '',
+      kelasAkses: role === 'walikelas' ? '7 MTS PUTRA' : '',
+      assignedMapelIds: [],
+      mapelAkses: [],
+      nip: '',
+      authProvider: 'google',
+      createdAt: now,
+      lastLoginAt: now,
+    };
+
+    // Save profile to Cloud Firestore
+    await saveUserToFirestore(newUser);
+
+    return { appUser: newUser, isNewUser: true };
   } catch (error: any) {
-    console.error('Google Sign-in error:', error);
+    console.error('Google Sign-in / Registration error:', error);
     throw error;
-  } finally {
-    isSigningIn = false;
   }
+}
+
+/**
+ * Standard Firebase Google Sign-In wrapper
+ */
+export const signInWithGoogle = async (): Promise<{ user: User; accessToken: string }> => {
+  const result = await signInWithPopup(auth, googleProvider);
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  cachedAccessToken = credential?.accessToken || 'google-auth-verified';
+  return { user: result.user, accessToken: cachedAccessToken };
 };
 
-export const getCachedAccessToken = (): string | null => {
-  return cachedAccessToken;
-};
-
+/**
+ * Signs out from Firebase Authentication
+ */
 export const googleSignOut = async (): Promise<void> => {
   await signOut(auth);
   cachedAccessToken = null;
 };
+
+/**
+ * Listens to Firebase Auth state changes.
+ * Automatically restores session on page reload or across devices.
+ */
+export function listenToAuthState(
+  onUserDetected: (appUser: AppUser) => void,
+  onLoggedOut: () => void
+): () => void {
+  return onAuthStateChanged(auth, async (fbUser: User | null) => {
+    if (fbUser) {
+      try {
+        const profile = await fetchUserFromFirestore(fbUser.uid);
+        if (profile) {
+          onUserDetected(profile);
+          return;
+        }
+
+        // If authenticated in Firebase but no Firestore document yet (e.g. edge case)
+        const cleanEmail = (fbUser.email || '').toLowerCase().trim();
+        const cleanUsername = cleanEmail ? cleanEmail.split('@')[0] : `user_${fbUser.uid.slice(0, 6)}`;
+        const isAdmin = cleanEmail === 'ilhamabdillah987@gmail.com';
+
+        const autoUser: AppUser = {
+          id: fbUser.uid,
+          googleUid: fbUser.uid,
+          username: cleanUsername,
+          fullName: fbUser.displayName || cleanUsername,
+          namaLengkap: fbUser.displayName || cleanUsername,
+          email: cleanEmail,
+          photoUrl: fbUser.photoURL || '',
+          role: isAdmin ? 'admin' : 'walikelas',
+          status: 'active',
+          assignedClass: '7 MTS PUTRA',
+          kelasAkses: '7 MTS PUTRA',
+          authProvider: 'google',
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+        };
+
+        await saveUserToFirestore(autoUser);
+        onUserDetected(autoUser);
+      } catch (err) {
+        console.warn('Failed to load user profile on auth state change:', err);
+      }
+    } else {
+      onLoggedOut();
+    }
+  });
+}
 
 /**
  * Persists an AppUser into Firestore /users/{uid}
@@ -155,7 +284,9 @@ export async function saveUserToFirestore(user: AppUser): Promise<void> {
       password: user.password || '',
       fullName: user.fullName || user.namaLengkap || '',
       email: user.email || '',
+      photoUrl: user.photoUrl || '',
       role: user.role,
+      status: user.status || 'active',
       assignedClass: user.assignedClass || user.kelasAkses || '',
       kelasAkses: user.kelasAkses || user.assignedClass || '',
       assignedMapelIds: user.assignedMapelIds || [],
@@ -163,6 +294,7 @@ export async function saveUserToFirestore(user: AppUser): Promise<void> {
       nip: user.nip || '',
       authProvider: user.authProvider || 'google',
       createdAt: user.createdAt || new Date().toISOString(),
+      lastLoginAt: user.lastLoginAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {
@@ -181,12 +313,15 @@ export async function fetchUserFromFirestore(uid: string): Promise<AppUser | nul
       const data = userDoc.data();
       return {
         id: data.uid || uid,
+        googleUid: data.uid || uid,
         username: data.username,
         password: data.password,
         fullName: data.fullName,
         namaLengkap: data.fullName,
         role: data.role,
         email: data.email,
+        photoUrl: data.photoUrl || '',
+        status: data.status || 'active',
         assignedClass: data.assignedClass,
         kelasAkses: data.kelasAkses,
         assignedMapelIds: data.assignedMapelIds || [],
@@ -194,6 +329,7 @@ export async function fetchUserFromFirestore(uid: string): Promise<AppUser | nul
         nip: data.nip || '',
         authProvider: data.authProvider || 'google',
         createdAt: data.createdAt,
+        lastLoginAt: data.lastLoginAt,
       };
     }
     return null;

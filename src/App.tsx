@@ -40,6 +40,16 @@ import {
   syncSantriToGas,
   isGasAutoSyncEnabled,
 } from './services/googleSheetsGasService';
+import { listenToAuthState, googleSignOut } from './services/googleAuth';
+import {
+  subscribeToSchoolData,
+  syncSantriToFirestore,
+  syncNilaiToFirestore,
+  syncSettingsToFirestore,
+  syncMapelToFirestore,
+  syncUsersToFirestore,
+  migrateInitialDataToFirestore,
+} from './services/firestoreSync';
 
 import {
   PenTool,
@@ -368,6 +378,81 @@ export default function App() {
       });
   }, []);
 
+  // 1. Firebase Auth State Listener (ensures session persists across refresh & multiple devices)
+  useEffect(() => {
+    const unsubAuth = listenToAuthState(
+      (detectedUser) => {
+        setCurrentUser(detectedUser);
+      },
+      () => {
+        // User is signed out
+      }
+    );
+    return () => unsubAuth();
+  }, []);
+
+  // 2. Real-time Cloud Firestore synchronization across devices
+  useEffect(() => {
+    const unsubFirestore = subscribeToSchoolData({
+      onSantriUpdate: (items) => {
+        if (Array.isArray(items) && items.length > 0) {
+          setSantriList(items);
+          try {
+            localStorage.setItem('alhikmah_santri', JSON.stringify(items));
+          } catch (e) {}
+        }
+      },
+      onNilaiUpdate: (items) => {
+        if (items && typeof items === 'object' && Object.keys(items).length > 0) {
+          setNilaiMap(items);
+          try {
+            localStorage.setItem('alhikmah_nilai_map', JSON.stringify(items));
+          } catch (e) {}
+        }
+      },
+      onSettingsUpdate: (items) => {
+        if (items && typeof items === 'object') {
+          setSettings((prev) => ({ ...prev, ...items }));
+          try {
+            localStorage.setItem('alhikmah_settings', JSON.stringify(items));
+          } catch (e) {}
+        }
+      },
+      onMapelUpdate: (items) => {
+        if (Array.isArray(items) && items.length > 0) {
+          setMapelList(items);
+          try {
+            localStorage.setItem('alhikmah_mapel', JSON.stringify(items));
+          } catch (e) {}
+        }
+      },
+      onUsersUpdate: (items) => {
+        if (Array.isArray(items) && items.length > 0) {
+          setUsers(items);
+          try {
+            localStorage.setItem('alhikmah_users', JSON.stringify(items));
+          } catch (e) {}
+        }
+      },
+    });
+
+    return () => unsubFirestore();
+  }, []);
+
+  // 3. Auto migration: migrate local data into Cloud Firestore if Firestore is fresh
+  useEffect(() => {
+    if (currentUser) {
+      migrateInitialDataToFirestore({
+        santriList,
+        nilaiMap,
+        settings,
+        mapelList,
+        users,
+        userEmail: currentUser.email,
+      });
+    }
+  }, [currentUser]);
+
   // Sync to SessionStorage and LocalStorage
   useEffect(() => {
     if (currentUser) {
@@ -441,7 +526,12 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await googleSignOut();
+    } catch (e) {
+      console.warn('Google signout notice:', e);
+    }
     setCurrentUser(null);
     sessionStorage.removeItem('alhikmah_session_user');
     localStorage.removeItem('alhikmah_current_user');
@@ -453,6 +543,7 @@ export default function App() {
         ...prev,
         [newNilai.santriId]: newNilai,
       };
+      syncNilaiToFirestore(next, currentUser?.email || currentUser?.username).catch(() => {});
       fetch('/api/nilai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -472,6 +563,7 @@ export default function App() {
       } else {
         updated = [...prev, santri];
       }
+      syncSantriToFirestore(updated, currentUser?.email || currentUser?.username).catch(() => {});
       fetch('/api/santri', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -492,6 +584,7 @@ export default function App() {
   const handleDeleteSantri = (id: string) => {
     setSantriList((prev) => {
       const updated = prev.filter((s) => s.id !== id);
+      syncSantriToFirestore(updated, currentUser?.email || currentUser?.username).catch(() => {});
       fetch('/api/santri', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -508,6 +601,7 @@ export default function App() {
 
   const handleImportSantri = (imported: Santri[]) => {
     setSantriList(imported);
+    syncSantriToFirestore(imported, currentUser?.email || currentUser?.username).catch(() => {});
     fetch('/api/santri', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -521,6 +615,7 @@ export default function App() {
 
   const handleImportNilai = (importedMap: Record<string, NilaiSantri>) => {
     setNilaiMap(importedMap);
+    syncNilaiToFirestore(importedMap, currentUser?.email || currentUser?.username).catch(() => {});
     fetch('/api/nilai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -542,6 +637,7 @@ export default function App() {
 
   const handleBatchUpdateSantri = (updated: Santri[]) => {
     setSantriList(updated);
+    syncSantriToFirestore(updated, currentUser?.email || currentUser?.username).catch(() => {});
     fetch('/api/santri', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -551,6 +647,7 @@ export default function App() {
 
   const handleSaveSettings = (newSettings: RaportSettings) => {
     setSettings(newSettings);
+    syncSettingsToFirestore(newSettings, currentUser?.email || currentUser?.username).catch(() => {});
     fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -565,6 +662,7 @@ export default function App() {
         localStorage.setItem('alhikmah_users', JSON.stringify(next));
       } catch (e) {}
       saveSharedUsers(next).catch(() => {});
+      syncUsersToFirestore(next, currentUser?.email || currentUser?.username).catch(() => {});
       return next;
     });
 
@@ -582,6 +680,7 @@ export default function App() {
         localStorage.setItem('alhikmah_users', JSON.stringify(next));
       } catch (e) {}
       saveSharedUsers(next).catch(() => {});
+      syncUsersToFirestore(next, currentUser?.email || currentUser?.username).catch(() => {});
       return next;
     });
     if (currentUser && currentUser.id === updatedUser.id) {
@@ -602,6 +701,7 @@ export default function App() {
         localStorage.setItem('alhikmah_users', JSON.stringify(next));
       } catch (e) {}
       saveSharedUsers(next).catch(() => {});
+      syncUsersToFirestore(next, currentUser?.email || currentUser?.username).catch(() => {});
       return next;
     });
 
@@ -622,6 +722,7 @@ export default function App() {
         nipWaliKelas: waliNip || prev.nipWaliKelas || '',
         namaKelas: waliKelasBinaan,
       };
+      syncSettingsToFirestore(next, currentUser?.email || currentUser?.username).catch(() => {});
       fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -656,6 +757,8 @@ export default function App() {
     try {
       localStorage.setItem('alhikmah_nilai_map', JSON.stringify(updatedMap));
     } catch (e) {}
+
+    syncNilaiToFirestore(updatedMap, currentUser?.email || currentUser?.username).catch(() => {});
 
     fetch('/api/nilai', {
       method: 'POST',
@@ -819,6 +922,19 @@ export default function App() {
 
           {/* User Profile & Logout */}
           <div className="flex items-center gap-3">
+            {currentUser.photoUrl ? (
+              <img
+                src={currentUser.photoUrl}
+                alt=""
+                referrerPolicy="no-referrer"
+                className="w-9 h-9 rounded-full object-cover border-2 border-emerald-400/60 shadow-xs"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-emerald-800 text-emerald-100 flex items-center justify-center font-bold text-xs border border-emerald-600/50">
+                {(currentUser.namaLengkap || currentUser.fullName || 'U')[0]}
+              </div>
+            )}
+
             <div className="hidden md:flex flex-col text-right">
               <span className="text-xs font-bold text-white flex items-center gap-1.5 justify-end">
                 <span>{currentUser.namaLengkap || currentUser.fullName}</span>
@@ -832,19 +948,20 @@ export default function App() {
                 {currentUser.role === 'admin'
                   ? 'Administrator'
                   : currentUser.role === 'walikelas'
-                  ? `Wali Kelas • @${currentUser.username} (${currentUser.kelasAkses || currentUser.assignedClass || settings.namaKelas})`
-                  : `Guru Pengajar • @${currentUser.username}`}
+                  ? `Wali Kelas • ${currentUser.email || currentUser.username} (${currentUser.kelasAkses || currentUser.assignedClass || settings.namaKelas})`
+                  : `Guru Pengajar • ${currentUser.email || currentUser.username}`}
               </span>
             </div>
 
             <button
               type="button"
+              id="btn-keluar-akun"
               onClick={handleLogout}
-              className="p-2 text-emerald-200 hover:text-white hover:bg-emerald-800 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
-              title="Keluar (Logout)"
+              className="px-3 py-2 bg-emerald-800/90 hover:bg-rose-900 text-emerald-100 hover:text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold border border-emerald-700/60 shadow-xs"
+              title="Keluar dari Akun (Logout)"
             >
               <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Keluar</span>
+              <span className="hidden sm:inline">Keluar dari Akun</span>
             </button>
           </div>
         </div>

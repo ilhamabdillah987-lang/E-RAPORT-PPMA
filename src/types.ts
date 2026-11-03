@@ -17,6 +17,8 @@ export interface AppUser {
   mapelAkses?: string[];
   nip?: string;
   createdAt: string;
+  lastLoginAt?: string;
+  status?: 'active' | 'suspended' | 'pending';
 }
 
 export interface Santri {
