@@ -19,6 +19,7 @@ import {
   QrCode,
   Check,
   Sparkles,
+  X,
 } from 'lucide-react';
 import {
   fetchSharedUsers,
@@ -32,6 +33,15 @@ import {
   fetchUserFromFirestore,
   signInOrRegisterWithGoogle,
 } from '../services/googleAuth';
+import {
+  findAccountInRegistry,
+  findAccountsByEmail,
+  verifyRegistryPassword,
+  registryToAppUser,
+  saveAccountToFirestoreRegistry,
+  migrateLocalAccountsToRegistry,
+  FirebaseConnectionError,
+} from '../services/accountAuthService';
 import {
   GoogleRegistrationModal,
   GoogleAuthProfile,
@@ -69,6 +79,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
   // Google Registration & Login states
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isGoogleChoiceOpen, setIsGoogleChoiceOpen] = useState(false);
   const [googleProfileForReg, setGoogleProfileForReg] = useState<GoogleAuthProfile | null>(null);
   const [isGoogleRegModalOpen, setIsGoogleRegModalOpen] = useState(false);
   const [regInitialRole, setRegInitialRole] = useState<'walikelas' | 'guru'>('walikelas');
@@ -85,7 +96,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setIsGoogleRegModalOpen(true);
   };
 
-  // Fetch users from cloud relay, server, and URL hash
+  // Fetch users from cloud relay, server, and URL hash & migrate to Firestore registry
   useEffect(() => {
     // 1. Check URL hash for direct instant sync
     const urlSync = syncFromUrlHash();
@@ -95,6 +106,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         type: 'success',
         text: `Sinkronisasi Tautan Berhasil! ${urlSync.users.length} akun pengguna dari Admin telah dimuat.`,
       });
+      migrateLocalAccountsToRegistry(urlSync.users).catch(() => {});
       return;
     }
 
@@ -102,6 +114,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     fetchSharedUsers().then((shared) => {
       if (shared && shared.length > 0) {
         setServerUsers(shared);
+        migrateLocalAccountsToRegistry(shared).catch(() => {});
       }
     });
   }, []);
@@ -116,47 +129,92 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   }, []);
 
+  const [multipleAccountsForGoogle, setMultipleAccountsForGoogle] = useState<AppUser[] | null>(null);
+  const [googleEmailForMultiple, setGoogleEmailForMultiple] = useState<string>('');
+
   const handleStartGoogleAuth = async (mode: 'daftar' | 'masuk') => {
     setIsGoogleLoading(true);
     setGoogleNotice(null);
     setError('');
 
     try {
-      const preferredRole = loginMode === 'guru' ? 'guru' : 'walikelas';
-      const { appUser, isNewUser } = await signInOrRegisterWithGoogle(preferredRole);
+      const { user: gUser } = await signInWithGoogle();
+      const cleanEmail = (gUser.email || '').toLowerCase().trim();
+      const displayName = gUser.displayName || '';
+      const photoURL = gUser.photoURL || '';
 
-      // Update state and persistent cache
-      const cleanList = allUsers.filter(
-        (u) => u.id !== appUser.id && (u.username || '').toLowerCase() !== (appUser.username || '').toLowerCase()
-      );
-      const updatedList = [...cleanList, appUser];
-      setServerUsers(updatedList);
+      // MODE: DAFTAR AKUN BARU DENGAN GOOGLE
+      // Membuka modal pendaftaran username baru untuk akun Google ini (bisa banyak username)
+      if (mode === 'daftar') {
+        setRegInitialRole(loginMode === 'guru' ? 'guru' : 'walikelas');
+        setGoogleProfileForReg({
+          uid: gUser.uid,
+          email: cleanEmail,
+          displayName,
+          photoURL,
+        });
+        setIsGoogleRegModalOpen(true);
+        return;
+      }
+
+      // MODE: MASUK DENGAN AKUN GOOGLE
+      // Cari semua username yang sudah didaftarkan menggunakan akun Google ini
+      let matchedAccounts: AppUser[] = [];
       try {
-        localStorage.setItem('alhikmah_users', JSON.stringify(updatedList));
-        saveSharedUsers(updatedList).catch(() => {});
-      } catch (e) {}
-
-      if (onRegisterUser && isNewUser) {
-        onRegisterUser(appUser);
+        const regList = await findAccountsByEmail(cleanEmail);
+        if (regList && regList.length > 0) {
+          matchedAccounts = regList.map((r) => registryToAppUser(r));
+        }
+      } catch (fsErr) {
+        console.warn('findAccountsByEmail warning:', fsErr);
       }
 
-      if (isNewUser) {
+      // Gabungkan dengan akun lokal/server jika ada
+      const localMatches = allUsers.filter(
+        (u) => u.email && u.email.trim().toLowerCase() === cleanEmail
+      );
+      localMatches.forEach((lu) => {
+        if (
+          !matchedAccounts.some(
+            (m) => (m.username || '').toLowerCase() === (lu.username || '').toLowerCase()
+          )
+        ) {
+          matchedAccounts.push(lu);
+        }
+      });
+
+      if (matchedAccounts.length > 1) {
+        // Satu akun Google ini punya banyak username! Tampilkan pilihan username
+        setMultipleAccountsForGoogle(matchedAccounts);
+        setGoogleEmailForMultiple(cleanEmail);
+        return;
+      } else if (matchedAccounts.length === 1) {
+        // Tepat 1 akun, langsung masuk
+        const single = matchedAccounts[0];
         setGoogleNotice({
           type: 'success',
-          text: `Pendaftaran Akun Google Berhasil! Profil Anda (${appUser.email}) telah dibuat di Cloud Firestore sebagai ${
-            appUser.role === 'admin' ? 'Administrator' : appUser.role === 'walikelas' ? 'Wali Kelas' : 'Guru Pengajar'
-          }. Mengalihkan ke dashboard...`,
+          text: `Selamat datang kembali, ${single.namaLengkap || single.fullName}! Sedang mengalihkan ke dashboard...`,
         });
+        setTimeout(() => {
+          onLogin(single);
+        }, 500);
+        return;
       } else {
+        // Belum ada username yang terdaftar untuk akun Google ini, arahkan ke pendaftaran
         setGoogleNotice({
-          type: 'success',
-          text: `Selamat datang kembali, ${appUser.namaLengkap || appUser.fullName}! Sedang mengalihkan ke dashboard...`,
+          type: 'info',
+          text: `Akun Google (${cleanEmail}) belum memiliki username terdaftar. Silakan buat username pertama Anda.`,
         });
+        setRegInitialRole(loginMode === 'guru' ? 'guru' : 'walikelas');
+        setGoogleProfileForReg({
+          uid: gUser.uid,
+          email: cleanEmail,
+          displayName,
+          photoURL,
+        });
+        setIsGoogleRegModalOpen(true);
+        return;
       }
-
-      setTimeout(() => {
-        onLogin(appUser);
-      }, 600);
     } catch (err: any) {
       console.error('Google auth error:', err);
       if (
@@ -182,35 +240,50 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setIsGoogleRegModalOpen(false);
     setGoogleProfileForReg(null);
 
+    const cleanUsername = newUser.username.trim().toLowerCase();
+    const cleanEmail = (newUser.email || '').trim().toLowerCase();
+    const normalizedUser: AppUser = {
+      ...newUser,
+      username: cleanUsername,
+      email: cleanEmail,
+    };
+
     // 1. Invoke onRegisterUser callback
     if (onRegisterUser) {
-      onRegisterUser(newUser);
+      onRegisterUser(normalizedUser);
     }
 
     // 2. Save to local storage & cloud sync
     const cleanList = allUsers.filter(
       (u) =>
-        u.username.trim().toLowerCase() !== newUser.username.trim().toLowerCase() &&
-        u.id !== newUser.id
+        (u.username || '').trim().toLowerCase() !== cleanUsername &&
+        u.id !== normalizedUser.id
     );
-    const next = [...cleanList, newUser];
+    const next = [...cleanList, normalizedUser];
     setServerUsers(next);
     try {
       localStorage.setItem('alhikmah_users', JSON.stringify(next));
       await saveSharedUsers(next);
     } catch (e) {}
 
-    // 3. Save to backend server dedicated endpoints (/api/auth/register & /api/users)
+    // 3. Save to Cloud Firestore centralized account_registry (Universal cross-device)
+    try {
+      await saveAccountToFirestoreRegistry(normalizedUser, newUser.password);
+    } catch (e) {
+      console.warn('Error saving to account registry:', e);
+    }
+
+    // 4. Save to backend server dedicated endpoints (/api/auth/register & /api/users)
     try {
       await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser),
+        body: JSON.stringify(normalizedUser),
       });
       await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser),
+        body: JSON.stringify(normalizedUser),
       });
       await fetch('/api/users/sync', {
         method: 'POST',
@@ -219,20 +292,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
       });
     } catch (e) {}
 
-    // 4. Save to Firebase Firestore /users/{uid} for cross-device persistence
+    // 5. Save to Firebase Firestore /users/{uid}
     try {
-      await saveUserToFirestore(newUser);
+      await saveUserToFirestore(normalizedUser);
     } catch (fsErr) {
       console.warn('Firestore user save notice:', fsErr);
     }
 
     setGoogleNotice({
       type: 'success',
-      text: `Pendaftaran Berhasil! Username "${newUser.username}" dan Password Anda telah aktif di server. Anda dapat login di HP, Laptop, atau komputer manapun dengan Username & Password ini, meski akun Google di perangkat tersebut berbeda.`,
+      text: `Pendaftaran Berhasil! Akun "${normalizedUser.username}" telah tersimpan di Cloud Firestore. Anda dapat login di HP, Laptop, atau perangkat manapun dengan Username & Password ini.`,
     });
 
     setTimeout(() => {
-      onLogin(newUser);
+      onLogin(normalizedUser);
     }, 700);
   };
 
@@ -330,7 +403,53 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
 
-    // 1. Centralized server-side verification first (enables cross-device login on any browser/device)
+    if (!cleanPassword) {
+      setError('Silakan masukkan password akun Anda.');
+      return;
+    }
+
+    let firestoreConnectionFailed = false;
+
+    // 1. Direct Cloud Firestore Central Registry Check (Universal Cross-Device across all HP / Laptop / PC)
+    try {
+      const regAccount = await findAccountInRegistry(cleanUsername);
+      if (regAccount) {
+        const isMatch = await verifyRegistryPassword(cleanPassword, regAccount);
+        if (isMatch) {
+          const appUser = registryToAppUser(regAccount, cleanPassword);
+          const cleanList = allUsers.filter(
+            (u) =>
+              (u.username || '').trim().toLowerCase() !== cleanUsername &&
+              u.id !== appUser.id
+          );
+          const updated = [...cleanList, appUser];
+          setServerUsers(updated);
+          try {
+            localStorage.setItem('alhikmah_users', JSON.stringify(updated));
+            saveSharedUsers(updated).catch(() => {});
+          } catch (e) {}
+
+          onLogin(appUser);
+          return;
+        } else {
+          setError(
+            `Password yang Anda masukkan salah untuk akun "${regAccount.username}". Periksa kembali huruf besar/kecil Anda.`
+          );
+          return;
+        }
+      }
+    } catch (fsErr: any) {
+      console.warn('Firestore registry query notice:', fsErr);
+      if (
+        fsErr instanceof FirebaseConnectionError ||
+        fsErr?.message?.includes('Firebase') ||
+        fsErr?.message?.includes('offline')
+      ) {
+        firestoreConnectionFailed = true;
+      }
+    }
+
+    // 2. Centralized server-side verification (/api/auth/login)
     try {
       const resp = await fetch('/api/auth/login', {
         method: 'POST',
@@ -341,8 +460,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
       if (resp.ok && data.success && data.user) {
         if (Array.isArray(data.allUsers)) {
           setServerUsers(data.allUsers);
-          localStorage.setItem('alhikmah_users', JSON.stringify(data.allUsers));
+          try {
+            localStorage.setItem('alhikmah_users', JSON.stringify(data.allUsers));
+          } catch (e) {}
         }
+        // Auto-save to Firestore registry in background
+        saveAccountToFirestoreRegistry(data.user, cleanPassword).catch(() => {});
         onLogin(data.user);
         return;
       } else if (data.code === 'INVALID_PASSWORD') {
@@ -353,62 +476,52 @@ export const LoginView: React.FC<LoginViewProps> = ({
       // Server offline / network fallback
     }
 
-    // 2. Check if user exists in client state by username or email
-    let matchedUser = allUsers.find(
+    // 3. Check client state / local accounts
+    const matchedUser = allUsers.find(
       (u) =>
-        u.username.trim().toLowerCase() === cleanUsername ||
+        (u.username || '').trim().toLowerCase() === cleanUsername ||
         (u.email && u.email.trim().toLowerCase() === cleanUsername)
     );
 
-    // If not found in current local state, do a fast live fetch from cloud relay
-    if (!matchedUser) {
-      try {
-        const liveUsers = await fetchSharedUsers();
-        if (liveUsers && liveUsers.length > 0) {
-          setServerUsers(liveUsers);
-          const found = liveUsers.find(
-            (u) =>
-              u.username.trim().toLowerCase() === cleanUsername ||
-              (u.email && u.email.trim().toLowerCase() === cleanUsername)
-          );
-          if (found) {
-            matchedUser = found;
-          }
-        }
-      } catch (e) {}
-    }
-
-    if (!matchedUser) {
-      if (loginMode === 'guru') {
+    if (matchedUser) {
+      const expectedPassword = matchedUser.password || '';
+      if (
+        expectedPassword &&
+        expectedPassword !== '-' &&
+        expectedPassword !== password &&
+        expectedPassword.trim() !== cleanPassword
+      ) {
         setError(
-          `Username / Akun "${username.trim()}" tidak ditemukan. Silakan gunakan tombol "Daftar Akun Google" di atas atau hubungi Admin.`
+          `Password yang Anda masukkan salah untuk akun "${matchedUser.username}". Silakan periksa kembali huruf besar/kecil atau hubungi Admin.`
         );
-      } else if (loginMode === 'walikelas') {
-        setError(
-          `Username / Akun "${username.trim()}" tidak ditemukan. Silakan gunakan tombol "Daftar Akun Google" di atas untuk membuat username & password Wali Kelas.`
-        );
-      } else {
-        setError(`Username "${username.trim()}" tidak ditemukan sebagai Administrator.`);
+        return;
       }
+
+      // Auto-save to Firestore registry in background
+      saveAccountToFirestoreRegistry(matchedUser, cleanPassword).catch(() => {});
+      onLogin(matchedUser);
       return;
     }
 
-    if (!cleanPassword) {
-      setError('Silakan masukkan password akun Anda.');
-      return;
-    }
-
-    // 3. Validate Password (supports exact match or trimmed match)
-    const expectedPassword = matchedUser.password || '';
-    if (expectedPassword && expectedPassword !== '-' && expectedPassword !== password && expectedPassword.trim() !== cleanPassword) {
+    // 4. Handle connection error vs account not found
+    if (firestoreConnectionFailed) {
       setError(
-        `Password yang Anda masukkan salah untuk akun "${matchedUser.username}". Silakan periksa kembali huruf besar/kecil atau hubungi Admin.`
+        'Koneksi ke database online Firebase gagal. Periksa koneksi internet Anda dan coba beberapa saat lagi.'
       );
       return;
     }
 
-    // 4. Complete login
-    onLogin(matchedUser);
+    if (loginMode === 'guru') {
+      setError(
+        `Username / Akun "${username.trim()}" tidak ditemukan. Silakan gunakan tombol "Masuk / Daftar dengan Google" di atas atau hubungi Admin.`
+      );
+    } else if (loginMode === 'walikelas') {
+      setError(
+        `Username / Akun "${username.trim()}" tidak ditemukan. Silakan gunakan tombol "Masuk / Daftar dengan Google" di atas untuk mendaftarkan akun Wali Kelas Anda.`
+      );
+    } else {
+      setError(`Username "${username.trim()}" tidak ditemukan sebagai Administrator.`);
+    }
   };
 
   const handleQuickAdminLogin = () => {
@@ -488,17 +601,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
           )}
 
           <div className="space-y-3">
-            {/* DUA TOMBOL UTAMA: MASUK DENGAN GOOGLE & DAFTAR DENGAN GOOGLE */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {/* Tombol 1: Masuk dengan Google */}
-              <button
-                type="button"
-                id="btn-masuk-google"
-                disabled={isGoogleLoading}
-                onClick={() => handleStartGoogleAuth('masuk')}
-                className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-800 font-extrabold text-xs sm:text-sm rounded-2xl border-2 border-emerald-600/30 hover:border-emerald-600 shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer active:scale-[0.99] disabled:opacity-50"
-              >
-                <div className="w-5 h-5 shrink-0">
+            {/* SATU TOMBOL TUNGGAL: MASUK / DAFTAR DENGAN GOOGLE */}
+            <button
+              type="button"
+              id="btn-google-auth-main"
+              disabled={isGoogleLoading}
+              onClick={() => setIsGoogleChoiceOpen(true)}
+              className="w-full py-3.5 px-4 sm:px-5 bg-white hover:bg-emerald-50/60 text-slate-800 font-extrabold text-xs sm:text-sm rounded-2xl border-2 border-emerald-600/30 hover:border-emerald-600 shadow-md hover:shadow-lg transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] disabled:opacity-50 group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 shrink-0">
                   <svg className="w-full h-full" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -506,28 +618,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                   </svg>
                 </div>
-                <span>{isGoogleLoading ? 'Menghubungkan...' : 'Masuk dengan Google'}</span>
-              </button>
-
-              {/* Tombol 2: Daftar dengan Google */}
-              <button
-                type="button"
-                id="btn-daftar-google"
-                disabled={isGoogleLoading}
-                onClick={() => handleStartGoogleAuth('daftar')}
-                className="w-full py-3.5 px-4 bg-linear-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer active:scale-[0.99] border-2 border-emerald-500/40 disabled:opacity-50"
-              >
-                <div className="w-5 h-5 shrink-0 bg-white rounded-full p-0.5 flex items-center justify-center">
-                  <svg className="w-full h-full" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                  </svg>
+                <div className="text-left">
+                  <div className="font-black text-xs sm:text-sm text-slate-900 group-hover:text-emerald-900">
+                    {isGoogleLoading ? 'Menghubungkan ke Google...' : 'Masuk / Daftar dengan Google'}
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 font-normal">
+                    Pilih akun Google Anda untuk masuk atau mendaftar
+                  </div>
                 </div>
-                <span>{isGoogleLoading ? 'Menghubungkan...' : 'Daftar dengan Google'}</span>
-              </button>
-            </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-emerald-600 group-hover:translate-x-1 transition-transform shrink-0" />
+            </button>
 
             {/* Tombol Opsi: Daftar dengan Mengetik Akun Google Sendiri */}
             <button
@@ -625,22 +726,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </p>
               </div>
             </div>
-          ) : loginMode === 'walikelas' ? (
-            <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
-              <School className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
-              <div className="text-xs text-emerald-900 leading-relaxed">
-                <p className="font-bold text-emerald-950 flex items-center gap-1.5">
-                  <span>Portal Masuk Wali Kelas</span>
-                  <span className="px-2 py-0.2 bg-emerald-200/80 text-emerald-900 text-[10px] font-black rounded-full">
-                    Akses Semua Device
-                  </span>
-                </p>
-                <p className="text-[11px] text-emerald-800 mt-1">
-                  Masukkan <strong>Username</strong> dan <strong>Password</strong> yang telah Anda buat saat mendaftar. Anda dapat login di <strong>HP, Laptop, atau PC manapun</strong>, meskipun akun Google yang aktif di perangkat tersebut berbeda.
-                </p>
-              </div>
-            </div>
-          ) : (
+          ) : loginMode === 'walikelas' ? null : (
             <div className="mb-5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-3">
               <Shield className="w-5 h-5 text-slate-800 shrink-0 mt-0.5" />
               <div className="text-xs text-slate-800 leading-relaxed">
@@ -967,6 +1053,229 @@ export const LoginView: React.FC<LoginViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Modal Pilihan Akses Akun Google: Masuk atau Daftar */}
+      {isGoogleChoiceOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-emerald-500/20 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 shrink-0">
+                  <svg className="w-full h-full" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900">Akses Akun Google</h3>
+                  <p className="text-[11px] text-slate-500">Pilih masuk akun atau daftar akun baru</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGoogleChoiceOpen(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-5 space-y-3">
+              {/* Opsi 1: Masuk dengan Google */}
+              <button
+                type="button"
+                id="btn-choice-masuk-google"
+                onClick={() => {
+                  setIsGoogleChoiceOpen(false);
+                  handleStartGoogleAuth('masuk');
+                }}
+                className="w-full p-4 rounded-2xl border-2 border-emerald-600/30 hover:border-emerald-600 bg-emerald-50/40 hover:bg-emerald-50 text-left transition-all flex items-center justify-between group cursor-pointer shadow-xs"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-black text-xs sm:text-sm text-emerald-950 group-hover:text-emerald-800">
+                      Masuk dengan Akun Google
+                    </div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">
+                      Sudah punya akun? Masuk langsung dengan akun Google Anda
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-emerald-700 group-hover:translate-x-1 transition-transform shrink-0" />
+              </button>
+
+              {/* Opsi 2: Daftar dengan Google */}
+              <button
+                type="button"
+                id="btn-choice-daftar-google"
+                onClick={() => {
+                  setIsGoogleChoiceOpen(false);
+                  handleStartGoogleAuth('daftar');
+                }}
+                className="w-full p-4 rounded-2xl border-2 border-blue-600/30 hover:border-blue-600 bg-blue-50/40 hover:bg-blue-50 text-left transition-all flex items-center justify-between group cursor-pointer shadow-xs"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-blue-700 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-black text-xs sm:text-sm text-blue-950 group-hover:text-blue-800">
+                      Daftar Akun Baru dengan Google
+                    </div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">
+                      Belum terdaftar? Buat profil Guru atau Wali Kelas baru
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-blue-700 group-hover:translate-x-1 transition-transform shrink-0" />
+              </button>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsGoogleChoiceOpen(false);
+                  handleOpenDirectGoogleReg(loginMode === 'guru' ? 'guru' : 'walikelas');
+                }}
+                className="text-xs font-bold text-slate-600 hover:text-emerald-700 underline cursor-pointer"
+              >
+                Atau buat username & password sendiri (+ ketik akun Google)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pemilih Akun Jika 1 Akun Google Memiliki Banyak Username */}
+      {multipleAccountsForGoogle && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-emerald-500/20 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 shrink-0">
+                  <svg className="w-full h-full" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900">Pilih Username Akun</h3>
+                  <p className="text-[11px] text-slate-500 truncate max-w-[280px]">
+                    Akun Google: <strong className="text-slate-800">{googleEmailForMultiple}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMultipleAccountsForGoogle(null)}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4 overflow-y-auto space-y-2.5 flex-1 pr-1">
+              <p className="text-xs text-slate-600 mb-2">
+                Akun Google ini terdaftar dengan <strong>{multipleAccountsForGoogle.length} username</strong>. Silakan pilih akun yang ingin Anda gunakan untuk masuk:
+              </p>
+
+              {multipleAccountsForGoogle.map((acc) => (
+                <div
+                  key={acc.id || acc.username}
+                  onClick={() => {
+                    setMultipleAccountsForGoogle(null);
+                    setGoogleNotice({
+                      type: 'success',
+                      text: `Selamat datang kembali, ${acc.namaLengkap || acc.fullName}! Sedang mengalihkan ke dashboard...`,
+                    });
+                    setTimeout(() => onLogin(acc), 400);
+                  }}
+                  className="p-3.5 bg-slate-50 hover:bg-emerald-50/70 border-2 border-slate-200 hover:border-emerald-600 rounded-2xl flex items-center justify-between cursor-pointer transition-all group shadow-xs"
+                >
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    {acc.photoUrl ? (
+                      <img
+                        src={acc.photoUrl}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm shrink-0">
+                        {(acc.namaLengkap || acc.fullName || acc.username)[0].toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-extrabold text-xs sm:text-sm text-slate-900 group-hover:text-emerald-950 truncate">
+                        {acc.namaLengkap || acc.fullName}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                        <span className="font-mono font-bold text-emerald-700">
+                          @{acc.username}
+                        </span>
+                        <span>•</span>
+                        <span className="font-medium px-2 py-0.2 rounded-full text-[10px] bg-slate-200/70 text-slate-700">
+                          {acc.role === 'admin'
+                            ? 'Administrator'
+                            : acc.role === 'walikelas'
+                            ? `Wali Kelas ${acc.kelasAkses || acc.assignedClass || ''}`
+                            : 'Guru Pengajar'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="px-3.5 py-1.5 bg-emerald-700 group-hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 shrink-0 transition-colors"
+                  >
+                    <span>Masuk</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const email = googleEmailForMultiple;
+                  setMultipleAccountsForGoogle(null);
+                  setRegInitialRole(loginMode === 'guru' ? 'guru' : 'walikelas');
+                  setGoogleProfileForReg({
+                    uid: '',
+                    email: email,
+                    displayName: '',
+                    photoURL: '',
+                  });
+                  setIsGoogleRegModalOpen(true);
+                }}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>+ Daftarkan Username Baru dengan Akun Google ini</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMultipleAccountsForGoogle(null)}
+                className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 font-semibold cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Pendaftaran Mandiri Akun Google */}
       {isGoogleRegModalOpen && (

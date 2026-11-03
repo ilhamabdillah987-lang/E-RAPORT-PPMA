@@ -49,9 +49,37 @@
         "timestamp": { "type": "string" }
       },
       "required": ["action", "performedBy", "timestamp"]
+    },
+    "AccountRegistry": {
+      "title": "AccountRegistry",
+      "description": "Universal cross-device user account lookup with salted password hash",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "maxLength": 64 },
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 120 },
+        "fullName": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["admin", "walikelas", "guru"] },
+        "passwordHash": { "type": "string", "maxLength": 128 },
+        "salt": { "type": "string", "maxLength": 64 },
+        "assignedClass": { "type": "string", "maxLength": 80 },
+        "kelasAkses": { "type": "string", "maxLength": 80 },
+        "assignedMapelIds": { "type": "array", "items": { "type": "string" } },
+        "mapelAkses": { "type": "array", "items": { "type": "string" } },
+        "nip": { "type": "string", "maxLength": 40 },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "authProvider": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["username", "uid", "role", "passwordHash"]
     }
   },
   "firestore": {
+    "/account_registry/{accountId}": {
+      "schema": "AccountRegistry",
+      "description": "Cross-device account registry with salted hashed credentials"
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User profiles authenticated via Firebase Auth & Google Sign-In"

@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { AppUser, UserRole } from '../types';
+import { saveAccountToFirestoreRegistry } from './accountAuthService';
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
@@ -192,8 +193,13 @@ export async function signInOrRegisterWithGoogle(preferredRole: 'walikelas' | 'g
       lastLoginAt: now,
     };
 
-    // Save profile to Cloud Firestore
+    // Save profile to Cloud Firestore and account registry
     await saveUserToFirestore(newUser);
+    try {
+      await saveAccountToFirestoreRegistry(newUser);
+    } catch (e) {
+      console.warn('Account registry sync note:', e);
+    }
 
     return { appUser: newUser, isNewUser: true };
   } catch (error: any) {
@@ -277,13 +283,13 @@ export function listenToAuthState(
 export async function saveUserToFirestore(user: AppUser): Promise<void> {
   const docId = user.googleUid || user.id;
   const pathForWrite = `users/${docId}`;
+  const cleanUsername = (user.username || '').trim().toLowerCase();
   try {
     await setDoc(doc(db, 'users', docId), {
       uid: docId,
-      username: user.username,
-      password: user.password || '',
+      username: cleanUsername,
       fullName: user.fullName || user.namaLengkap || '',
-      email: user.email || '',
+      email: (user.email || '').trim().toLowerCase(),
       photoUrl: user.photoUrl || '',
       role: user.role,
       status: user.status || 'active',
@@ -297,6 +303,11 @@ export async function saveUserToFirestore(user: AppUser): Promise<void> {
       lastLoginAt: user.lastLoginAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
+
+    // Also persist into account_registry
+    if (cleanUsername) {
+      await saveAccountToFirestoreRegistry(user, user.password).catch(() => {});
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, pathForWrite);
   }

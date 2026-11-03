@@ -138,18 +138,6 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
       return;
     }
 
-    // Check Google Email duplicate
-    const duplicateEmail = existingUsers.some(
-      (u) =>
-        u.email &&
-        u.email.trim().toLowerCase() === cleanEmail &&
-        u.googleUid !== googleProfile?.uid
-    );
-    if (duplicateEmail) {
-      setError(`Akun Google "${cleanEmail}" sudah terdaftar di sistem. Silakan login atau gunakan akun Google lain.`);
-      return;
-    }
-
     // 2. Validate Username
     const cleanUsername = username.trim().toLowerCase();
     if (!cleanUsername) {
@@ -167,11 +155,9 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
       return;
     }
 
-    // Check username uniqueness
+    // Check username uniqueness across all users
     const duplicateUsername = existingUsers.some(
-      (u) =>
-        u.username.trim().toLowerCase() === cleanUsername &&
-        u.googleUid !== googleProfile?.uid
+      (u) => (u.username || '').trim().toLowerCase() === cleanUsername
     );
     if (duplicateUsername) {
       setError(`Username "${cleanUsername}" sudah digunakan oleh akun lain. Silakan pilih username lain.`);
@@ -223,7 +209,7 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
       `google-${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
     const newUser: AppUser = {
-      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      id: `user-${cleanUsername}-${Date.now().toString(36)}`,
       username: cleanUsername,
       password: password, // Custom password for cross-device authentication
       role,
@@ -349,7 +335,7 @@ export const GoogleRegistrationModal: React.FC<GoogleRegistrationModalProps> = (
             </div>
 
             <p className="text-[10px] text-slate-600 leading-normal">
-              Pastikan mengetik alamat email Google yang aktif. Akun ini akan tertaut sebagai identitas login resmi Anda di aplikasi raport.
+              Pastikan mengetik alamat email Google yang aktif. <strong>Satu akun Google dapat mendaftarkan banyak username berbeda</strong> (misalnya untuk beberapa guru atau kelas binaan).
             </p>
           </div>
 

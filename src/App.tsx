@@ -50,6 +50,7 @@ import {
   syncUsersToFirestore,
   migrateInitialDataToFirestore,
 } from './services/firestoreSync';
+import { saveAccountToFirestoreRegistry } from './services/accountAuthService';
 
 import {
   PenTool,
@@ -75,8 +76,9 @@ export default function App() {
   // Persistence state
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     try {
-      localStorage.removeItem('alhikmah_current_user');
-      const session = sessionStorage.getItem('alhikmah_session_user');
+      const session =
+        localStorage.getItem('alhikmah_current_user') ||
+        sessionStorage.getItem('alhikmah_session_user');
       if (session && session !== 'undefined' && session !== 'null') {
         const parsed = JSON.parse(session);
         if (parsed && typeof parsed === 'object' && parsed.id && parsed.role) {
@@ -457,6 +459,7 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       sessionStorage.setItem('alhikmah_session_user', JSON.stringify(currentUser));
+      localStorage.setItem('alhikmah_current_user', JSON.stringify(currentUser));
     } else {
       sessionStorage.removeItem('alhikmah_session_user');
       localStorage.removeItem('alhikmah_current_user');
@@ -663,6 +666,7 @@ export default function App() {
       } catch (e) {}
       saveSharedUsers(next).catch(() => {});
       syncUsersToFirestore(next, currentUser?.email || currentUser?.username).catch(() => {});
+      saveAccountToFirestoreRegistry(user, user.password).catch(() => {});
       return next;
     });
 
@@ -681,6 +685,7 @@ export default function App() {
       } catch (e) {}
       saveSharedUsers(next).catch(() => {});
       syncUsersToFirestore(next, currentUser?.email || currentUser?.username).catch(() => {});
+      saveAccountToFirestoreRegistry(updatedUser, updatedUser.password).catch(() => {});
       return next;
     });
     if (currentUser && currentUser.id === updatedUser.id) {
