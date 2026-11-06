@@ -316,20 +316,20 @@ export const PrintRaportView: React.FC<PrintRaportViewProps> = ({
         </div>
 
         {/* Print Tip */}
-        <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3 text-xs text-amber-900 flex items-center gap-2.5">
-          <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+        <div className="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3.5 text-xs text-emerald-950 flex items-center gap-2.5">
+          <AlertCircle className="w-4 h-4 text-emerald-700 shrink-0" />
           <span>
-            <strong>Tips Cetak Raport:</strong> Pada dialog print browser, pilih ukuran <strong>A4</strong>, margin <strong>Default</strong> atau <strong>None</strong>, dan pastikan opsi <strong>Background graphics</strong> dicentang.
+            <strong>Format Resmi Fit to A4 (210mm × 297mm):</strong> Lembar raport telah dioptimalkan rapih dan proporsional untuk lembar A4, baik di tampilan aplikasi maupun ketika dicetak/disimpan ke PDF. Pada dialog cetak browser, pilih Paper Size: <strong>A4</strong>, Margin: <strong>Default</strong>, dan centang <strong>Background Graphics</strong>.
           </span>
         </div>
       </div>
 
       {/* Print Document Container / Live Preview */}
-      <div className="overflow-x-auto pb-12 flex justify-center">
+      <div className="overflow-x-auto pb-16 flex justify-center bg-slate-100/70 p-4 sm:p-6 rounded-3xl border border-slate-200/80">
         <div
           id="raport-print-area"
           style={{ transform: `scale(${zoomScale})`, transformOrigin: 'top center' }}
-          className="print:scale-100 print:transform-none space-y-8 print:space-y-0 transition-transform duration-200"
+          className="print:scale-100 print:transform-none space-y-8 print:space-y-0 transition-transform duration-200 w-[210mm] max-w-[210mm] shrink-0"
         >
           {/* Loop over students to be printed */}
           {targetSantriList.map((santri) => {

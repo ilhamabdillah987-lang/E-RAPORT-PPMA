@@ -18,7 +18,7 @@ export const RaportEkstraAbsensi: React.FC<RaportEkstraAbsensiProps> = ({
   const kehadiran = nilaiSantri?.kehadiran || { sakit: 0, izin: 0, tanpaKeterangan: 0 };
 
   return (
-    <div className="print-page bg-white w-full max-w-[210mm] mx-auto min-h-[290mm] p-10 sm:p-12 flex flex-col justify-between shadow-md print:shadow-none border border-slate-200 print:border-none text-black font-sans">
+    <div className="print-page bg-white w-full max-w-[210mm] mx-auto min-h-[297mm] p-8 sm:p-10 print:p-0 flex flex-col justify-between shadow-xl shadow-slate-300/50 print:shadow-none border border-slate-300 print:border-none text-black font-sans">
       <div>
         {/* Kop Surat */}
         <RaportKop settings={settings} />
@@ -119,7 +119,7 @@ export const RaportEkstraAbsensi: React.FC<RaportEkstraAbsensiProps> = ({
         <div className="text-center flex flex-col items-center">
           <p className="font-bold">Mengetahui,</p>
           <p className="font-bold">Orang Tua/Wali Santri</p>
-          <div className="h-24 sm:h-28 flex flex-col justify-end items-center">
+          <div className="h-20 sm:h-24 print:h-20 flex flex-col justify-end items-center">
             <div className="flex items-center text-xs sm:text-sm font-bold text-black">
               <span>(</span>
               <span className="w-48 border-b-2 border-black mx-1 inline-block"></span>
@@ -134,9 +134,9 @@ export const RaportEkstraAbsensi: React.FC<RaportEkstraAbsensiProps> = ({
             {settings.kotaCetak || 'Tangerang'}, {settings.tanggalCetak || '20 Desember 2025'}
           </p>
           <p className="font-bold">Wali Kelas,</p>
-          <div className="h-24 sm:h-28 flex flex-col justify-end items-center">
+          <div className="h-20 sm:h-24 print:h-20 flex flex-col justify-end items-center">
             {settings.namaWaliKelas ? (
-              <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
+              <p className="font-extrabold underline decoration-1 underline-offset-4 text-xs sm:text-sm">
                 {settings.namaWaliKelas}
               </p>
             ) : (

@@ -8,7 +8,7 @@ interface RaportCoverProps {
 
 export const RaportCover: React.FC<RaportCoverProps> = ({ santri, settings }) => {
   return (
-    <div className="print-page bg-white w-full max-w-[210mm] mx-auto min-h-[290mm] p-12 sm:p-16 flex flex-col justify-between items-center text-center shadow-md print:shadow-none border border-slate-200 print:border-none relative">
+    <div className="print-page bg-white w-full max-w-[210mm] mx-auto min-h-[297mm] p-10 sm:p-12 print:p-0 flex flex-col justify-between items-center text-center shadow-xl shadow-slate-300/50 print:shadow-none border border-slate-300 print:border-none relative">
       {/* Top Logo Container */}
       <div className="pt-10 flex flex-col items-center">
         <div className="w-36 h-36 flex flex-col items-center justify-center mb-8">

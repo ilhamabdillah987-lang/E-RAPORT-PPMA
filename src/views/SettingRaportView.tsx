@@ -167,6 +167,9 @@ export const SettingRaportView: React.FC<SettingRaportViewProps> = ({
                     className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                   />
                 </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  💡 Huruf besar & kecil akan tampil di lembar raport persis sesuai yang Anda ketik (contoh: <em>Ustadz H. Ahmad Fauzi, S.Pd.I.</em> atau <em>HURUF BESAR</em>).
+                </p>
               </div>
 
               <div>
@@ -201,6 +204,9 @@ export const SettingRaportView: React.FC<SettingRaportViewProps> = ({
                   className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                 />
               </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                💡 Huruf besar & kecil akan tampil di lembar raport persis sesuai yang Anda ketik (contoh: <em>KH. Syamsuddin Mahmud, Lc.</em> atau <em>HURUF BESAR</em>).
+              </p>
             </div>
 
             {/* 5. Tanggal Kenaikan/Kelulusan */}

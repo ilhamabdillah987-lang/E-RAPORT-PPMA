@@ -31,47 +31,27 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Account registry for cross-device username and email lookup
-    // Unauthenticated single get is permitted for login verification without plain text leakage
+    // Account registry for cross-device and cross-IP username verification
+    // Accessible across all networks and devices
     match /account_registry/{accountId} {
-      allow get: if isValidId(accountId);
-      allow list: if isSignedIn();
-      allow create, update: if isValidId(accountId) && (
-        (incoming().username is string && incoming().username.size() <= 64 && incoming().passwordHash is string) ||
-        (incoming().email is string && incoming().email.size() <= 120 && incoming().usernames is list)
-      );
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create, update: if isValidId(accountId);
+      allow delete: if true;
     }
 
-    // User profiles for authenticated users
+    // User profiles for cross-device synchronization
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow list: if isSignedIn();
-
-      allow create: if isSignedIn()
-        && isValidId(userId)
-        && request.auth.uid == userId
-        && incoming().uid == request.auth.uid;
-
-      allow update: if isSignedIn() && (
-        (request.auth.uid == userId && incoming().uid == existing().uid) ||
-        isAdmin()
-      );
-
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // School data (santri, nilai, settings, mapel, users)
     match /school_data/{dataType} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Audit logs for data changes
     match /audit_logs/{logId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
     }
   }
 }

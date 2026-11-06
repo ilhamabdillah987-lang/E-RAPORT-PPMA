@@ -14,14 +14,26 @@
   font-family: 'Amiri', serif;
 }
 
+/* Standard A4 Screen & Print layout */
+.print-page {
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  box-sizing: border-box;
+}
+
 /* Print specific styling for Raport Pesantren */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 15mm 12mm 15mm;
+    margin: 10mm 12mm 10mm 12mm;
   }
 
-  body {
+  html, body {
+    width: 210mm !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background-color: #ffffff !important;
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
@@ -39,15 +51,23 @@
     padding: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
+    height: 277mm !important;
+    max-height: 277mm !important;
+    min-height: 277mm !important;
     page-break-after: always !important;
     break-after: page !important;
-    height: auto !important;
-    min-height: 270mm !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
   .print-page:last-child {
-    page-break-after: avoid !important;
-    break-after: avoid !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   /* Ensure borders and table lines stay crisp black in print */

@@ -298,7 +298,7 @@ export async function saveUserToFirestore(user: AppUser): Promise<void> {
       assignedMapelIds: user.assignedMapelIds || [],
       mapelAkses: user.mapelAkses || [],
       nip: user.nip || '',
-      authProvider: user.authProvider || 'google',
+      authProvider: user.authProvider || 'local',
       createdAt: user.createdAt || new Date().toISOString(),
       lastLoginAt: user.lastLoginAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),

@@ -203,7 +203,7 @@ app.post('/api/auth/register', (req, res) => {
       email,
       photoUrl,
       googleUid,
-      authProvider = 'google',
+      authProvider = 'local',
     } = req.body || {};
 
     if (!username || !password) {
@@ -233,7 +233,7 @@ app.post('/api/auth/register', (req, res) => {
       email: email || '',
       photoUrl: photoUrl || '',
       googleUid: googleUid || '',
-      authProvider: authProvider || 'credentials',
+      authProvider: authProvider || 'local',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

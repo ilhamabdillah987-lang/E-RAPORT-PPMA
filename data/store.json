@@ -38,6 +38,25 @@
         "Asasul Mubtadiin Fi Ilmi Shorfi"
       ],
       "createdAt": "2025-07-01"
+    },
+    {
+      "id": "user-1793890289881-rnhkj",
+      "username": "saskiah",
+      "password": "password123",
+      "fullName": "Saskiah S.Pd",
+      "namaLengkap": "Saskiah S.Pd",
+      "role": "walikelas",
+      "assignedClass": "7 SMP PUTRA",
+      "kelasAkses": "7 SMP PUTRA",
+      "assignedMapelIds": [],
+      "mapelAkses": [],
+      "nip": "",
+      "email": "",
+      "photoUrl": "",
+      "googleUid": "",
+      "authProvider": "google",
+      "createdAt": "2026-11-05T14:51:29.881Z",
+      "updatedAt": "2026-11-05T14:51:29.881Z"
     }
   ],
   "settings": {
@@ -58,5 +77,5 @@
   },
   "santriList": [],
   "nilaiMap": {},
-  "lastUpdated": "2026-10-30T06:16:44.343Z"
+  "lastUpdated": "2026-11-05T14:51:29.882Z"
 }

@@ -37,7 +37,7 @@ export const RaportLegger: React.FC<RaportLeggerProps> = ({
     }));
 
   return (
-    <div className="print-page bg-white w-full max-w-[210mm] mx-auto min-h-[290mm] p-10 sm:p-12 flex flex-col justify-between shadow-md print:shadow-none border border-slate-200 print:border-none text-black font-sans">
+    <div className="print-page bg-white w-full max-w-[210mm] mx-auto min-h-[297mm] p-8 sm:p-10 print:p-0 flex flex-col justify-between shadow-xl shadow-slate-300/50 print:shadow-none border border-slate-300 print:border-none text-black font-sans">
       <div>
         {/* Toggle Mode in UI (Hidden in Print) */}
         <div className="no-print flex justify-between items-center bg-slate-100 p-2.5 rounded-xl mb-4 border border-slate-200 text-xs">
@@ -181,13 +181,13 @@ export const RaportLegger: React.FC<RaportLeggerProps> = ({
       </div>
 
       {/* Signature Section */}
-      <div className="mt-16 pt-8 grid grid-cols-2 gap-8 text-xs sm:text-sm text-black">
+      <div className="mt-10 pt-4 grid grid-cols-2 gap-8 text-xs sm:text-sm text-black">
         <div className="text-center flex flex-col items-center">
           <p className="font-bold">Mengetahui,</p>
           <p className="font-bold">Kepala Kepesantrenan</p>
-          <div className="h-24 sm:h-28 flex flex-col justify-end items-center">
+          <div className="h-20 sm:h-24 print:h-20 flex flex-col justify-end items-center">
             {settings.namaKepalaKepesantrenan ? (
-              <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
+              <p className="font-extrabold underline decoration-1 underline-offset-4 text-xs sm:text-sm">
                 {settings.namaKepalaKepesantrenan}
               </p>
             ) : (
@@ -205,9 +205,9 @@ export const RaportLegger: React.FC<RaportLeggerProps> = ({
             {settings.kotaCetak || 'Tangerang'}, {settings.tanggalCetak || '20 Desember 2025'}
           </p>
           <p className="font-bold">Wali Kelas,</p>
-          <div className="h-24 sm:h-28 flex flex-col justify-end items-center">
+          <div className="h-20 sm:h-24 print:h-20 flex flex-col justify-end items-center">
             {settings.namaWaliKelas ? (
-              <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
+              <p className="font-extrabold underline decoration-1 underline-offset-4 text-xs sm:text-sm">
                 {settings.namaWaliKelas}
               </p>
             ) : (

@@ -8,7 +8,7 @@ interface RaportIdentitasProps {
 
 export const RaportIdentitas: React.FC<RaportIdentitasProps> = ({ santri, settings }) => {
   return (
-    <div className="print-page bg-white w-full max-w-[210mm] mx-auto min-h-[290mm] p-10 sm:p-14 flex flex-col justify-between shadow-md print:shadow-none border border-slate-200 print:border-none text-black font-sans">
+    <div className="print-page bg-white w-full max-w-[210mm] mx-auto min-h-[297mm] p-8 sm:p-10 print:p-0 flex flex-col justify-between shadow-xl shadow-slate-300/50 print:shadow-none border border-slate-300 print:border-none text-black font-sans">
       <div>
         {/* Title */}
         <h2 className="text-center font-bold text-sm sm:text-base tracking-wide uppercase border-b-2 border-black pb-2 mb-6">
@@ -220,7 +220,7 @@ export const RaportIdentitas: React.FC<RaportIdentitasProps> = ({ santri, settin
           </p>
           <div className="h-20 flex flex-col justify-end items-center">
             {settings.namaKepalaKepesantrenan ? (
-              <p className="font-extrabold uppercase underline decoration-1 underline-offset-4 text-xs sm:text-sm">
+              <p className="font-extrabold underline decoration-1 underline-offset-4 text-xs sm:text-sm">
                 {settings.namaKepalaKepesantrenan}
               </p>
             ) : (
