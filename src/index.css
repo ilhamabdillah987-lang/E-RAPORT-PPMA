@@ -22,16 +22,18 @@
   box-sizing: border-box;
 }
 
-/* Print specific styling for Raport Pesantren */
+/* Print specific styling for Raport Pesantren - Full A4 Fit */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm 12mm 10mm 12mm;
+    margin: 0 !important;
   }
 
   html, body {
     width: 210mm !important;
-    height: auto !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    height: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
     background-color: #ffffff !important;
@@ -47,13 +49,15 @@
   .print-page {
     box-shadow: none !important;
     border: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    height: 277mm !important;
-    max-height: 277mm !important;
-    min-height: 277mm !important;
+    margin: 0 auto !important;
+    /* Safe inner padding so content is crisp and doesn't get cut by physical printer margins */
+    padding: 10mm 12mm 10mm 12mm !important;
+    width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
     page-break-after: always !important;
     break-after: page !important;
     page-break-inside: avoid !important;

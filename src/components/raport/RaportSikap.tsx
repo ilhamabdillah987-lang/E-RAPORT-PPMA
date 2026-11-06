@@ -47,18 +47,18 @@ export const RaportSikap: React.FC<RaportSikapProps> = ({
           </thead>
           <tbody>
             <tr className="border-b border-black">
-              <td className="border border-black p-4 font-bold text-center align-middle bg-slate-50/40 print:bg-transparent">
+              <td className="border border-black p-4 font-bold text-center align-top bg-slate-50/40 print:bg-transparent w-44">
                 Sikap Spiritual
               </td>
-              <td className="border border-black p-4 text-justify leading-relaxed">
+              <td className="border border-black p-5 text-justify leading-relaxed align-top h-48 print:h-44">
                 {spiritualDesc}
               </td>
             </tr>
             <tr className="border-b border-black">
-              <td className="border border-black p-4 font-bold text-center align-middle bg-slate-50/40 print:bg-transparent">
+              <td className="border border-black p-4 font-bold text-center align-top bg-slate-50/40 print:bg-transparent w-44">
                 Sikap Sosial
               </td>
-              <td className="border border-black p-4 text-justify leading-relaxed">
+              <td className="border border-black p-5 text-justify leading-relaxed align-top h-48 print:h-44">
                 {sosialDesc}
               </td>
             </tr>

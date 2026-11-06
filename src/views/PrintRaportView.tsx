@@ -315,12 +315,30 @@ export const PrintRaportView: React.FC<PrintRaportViewProps> = ({
           </div>
         </div>
 
-        {/* Print Tip */}
-        <div className="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3.5 text-xs text-emerald-950 flex items-center gap-2.5">
-          <AlertCircle className="w-4 h-4 text-emerald-700 shrink-0" />
-          <span>
-            <strong>Format Resmi Fit to A4 (210mm × 297mm):</strong> Lembar raport telah dioptimalkan rapih dan proporsional untuk lembar A4, baik di tampilan aplikasi maupun ketika dicetak/disimpan ke PDF. Pada dialog cetak browser, pilih Paper Size: <strong>A4</strong>, Margin: <strong>Default</strong>, dan centang <strong>Background Graphics</strong>.
-          </span>
+        {/* Panduan Cetak Pas Full A4 & Hilangkan Margin Biru */}
+        <div className="bg-emerald-50 border-2 border-emerald-300/80 rounded-2xl p-4 text-xs text-emerald-950 space-y-2">
+          <div className="flex items-center gap-2 font-black text-emerald-900 uppercase tracking-wide">
+            <AlertCircle className="w-4 h-4 text-emerald-700 shrink-0" />
+            <span>Petunjuk Cetak Full A4 & Menghilangkan Garis Margin Biru:</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 pt-1 text-[11px] font-medium leading-relaxed">
+            <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-200">
+              <span className="font-bold text-emerald-800 block mb-0.5">1. Hilangkan Garis Biru</span>
+              Pada menu dialog cetak, di bagian <strong className="text-slate-900">Margins</strong>, ubah dari <span className="bg-amber-100 text-amber-900 px-1 rounded font-bold">Custom</span> ke <span className="bg-emerald-100 text-emerald-900 px-1 rounded font-bold">None</span> atau <span className="bg-emerald-100 text-emerald-900 px-1 rounded font-bold">Default</span>. Kotak garis margin biru akan langsung hilang.
+            </div>
+            <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-200">
+              <span className="font-bold text-emerald-800 block mb-0.5">2. Kertas Pas Penuh A4</span>
+              Pastikan <strong className="text-slate-900">Paper size</strong> adalah <span className="bg-emerald-100 text-emerald-900 px-1 rounded font-bold">A4</span> dan <strong className="text-slate-900">Scale</strong> adalah <span className="bg-emerald-100 text-emerald-900 px-1 rounded font-bold">Default (100%)</span>.
+            </div>
+            <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-200">
+              <span className="font-bold text-emerald-800 block mb-0.5">3. Hapus Teks Tepi Header</span>
+              <strong className="text-slate-900">Hilangkan centang</strong> pada <span className="bg-slate-100 text-slate-800 px-1 rounded font-bold">Headers and footers</span> agar tidak tercetak tanggal dan link URL website.
+            </div>
+            <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-200">
+              <span className="font-bold text-emerald-800 block mb-0.5">4. Tajamkan Tabel & Logo</span>
+              <strong className="text-slate-900">Beri centang</strong> pada <span className="bg-emerald-100 text-emerald-900 px-1 rounded font-bold">Background graphics</span> agar warna kop dan border tabel tercetak tajam.
+            </div>
+          </div>
         </div>
       </div>
 
