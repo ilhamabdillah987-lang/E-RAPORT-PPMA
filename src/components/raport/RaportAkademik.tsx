@@ -70,7 +70,7 @@ export const RaportAkademik: React.FC<RaportAkademikProps> = ({
                 return (
                   <React.Fragment key={kategori}>
                     {/* Category Header Row */}
-                    <tr className="bg-slate-100 print:bg-slate-50 font-black border-t-2 border-b border-black">
+                    <tr className="bg-slate-100 print:bg-transparent font-black border-t-2 border-b border-black">
                       <td colSpan={7} className="border border-black px-3 py-1.5 text-black font-extrabold text-xs sm:text-sm uppercase tracking-wide">
                         {kategori}
                       </td>

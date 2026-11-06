@@ -343,11 +343,11 @@ export const PrintRaportView: React.FC<PrintRaportViewProps> = ({
       </div>
 
       {/* Print Document Container / Live Preview */}
-      <div className="overflow-x-auto pb-16 flex justify-center bg-slate-100/70 p-4 sm:p-6 rounded-3xl border border-slate-200/80">
+      <div className="print-container-wrapper overflow-x-auto pb-16 flex justify-center bg-slate-100/70 p-4 sm:p-6 rounded-3xl border border-slate-200/80 print:p-0 print:m-0 print:border-none print:bg-white print:rounded-none print:overflow-visible print:w-full print:block">
         <div
           id="raport-print-area"
           style={{ transform: `scale(${zoomScale})`, transformOrigin: 'top center' }}
-          className="print:scale-100 print:transform-none space-y-8 print:space-y-0 transition-transform duration-200 w-[210mm] max-w-[210mm] shrink-0"
+          className="print:scale-100 print:transform-none space-y-8 print:space-y-0 transition-transform duration-200 w-[210mm] max-w-[210mm] shrink-0 print:w-[210mm] print:max-w-[210mm] print:mx-auto print:bg-white print:p-0 print:m-0 print:border-none print:shadow-none"
         >
           {/* Loop over students to be printed */}
           {targetSantriList.map((santri) => {

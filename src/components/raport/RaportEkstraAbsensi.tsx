@@ -58,7 +58,7 @@ export const RaportEkstraAbsensi: React.FC<RaportEkstraAbsensiProps> = ({
               ))
             ) : (
               <tr className="border-b border-black">
-                <td colSpan={2} className="border border-black p-3.5 text-center italic font-bold text-black bg-slate-50/30">
+                <td colSpan={2} className="border border-black p-3.5 text-center italic font-bold text-black bg-slate-50/30 print:bg-transparent">
                   Tidak ada data kegiatan ekstrakurikuler yang diikuti
                 </td>
               </tr>

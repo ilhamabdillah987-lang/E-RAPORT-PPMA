@@ -40,7 +40,7 @@ export const RaportCover: React.FC<RaportCoverProps> = ({ santri, settings }) =>
       </div>
 
       {/* Santri Card Box */}
-      <div className="w-full max-w-md my-8 bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs">
+      <div className="w-full max-w-md my-8 bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs print:border-2 print:border-black print:rounded-none print:shadow-none print:bg-white">
         <div className="mb-6">
           <p className="text-[11px] font-medium tracking-widest text-slate-500 uppercase mb-2">
             NAMA SANTRI

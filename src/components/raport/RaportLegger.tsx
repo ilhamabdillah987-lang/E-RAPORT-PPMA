@@ -133,7 +133,7 @@ export const RaportLegger: React.FC<RaportLeggerProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border-2 border-black text-[10px]">
               <thead>
-                <tr className="bg-slate-100/70 font-bold text-center border-b border-black">
+                <tr className="bg-slate-100/70 print:bg-transparent font-bold text-center border-b border-black">
                   <th rowSpan={2} className="border border-black p-1 w-8">NO</th>
                   <th rowSpan={2} className="border border-black p-1 text-left min-w-32">NAMA SANTRI</th>
                   {mapelList.map((m) => (
@@ -144,7 +144,7 @@ export const RaportLegger: React.FC<RaportLeggerProps> = ({
                   <th rowSpan={2} className="border border-black p-1 w-12">RERATA</th>
                   <th rowSpan={2} className="border border-black p-1 w-10">RANK</th>
                 </tr>
-                <tr className="bg-slate-50 font-semibold text-center border-b border-black">
+                <tr className="bg-slate-50 print:bg-transparent font-semibold text-center border-b border-black">
                   {mapelList.map((m) => (
                     <React.Fragment key={m.id}>
                       <th className="border border-black px-1 py-0.5">T</th>
@@ -157,7 +157,7 @@ export const RaportLegger: React.FC<RaportLeggerProps> = ({
                 {rankedSantri.map((item, idx) => {
                   const n = nilaiMap[item.santri.id];
                   return (
-                    <tr key={item.santri.id} className="border-b border-black hover:bg-slate-50 text-center">
+                    <tr key={item.santri.id} className="border-b border-black hover:bg-slate-50 print:hover:bg-transparent text-center">
                       <td className="border border-black p-1 font-bold">{idx + 1}</td>
                       <td className="border border-black p-1 font-bold text-left px-2">{item.santri.namaLengkap}</td>
                       {mapelList.map((m) => {

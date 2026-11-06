@@ -22,42 +22,86 @@
   box-sizing: border-box;
 }
 
-/* Print specific styling for Raport Pesantren - Full A4 Fit */
+/* Print specific styling for Raport Pesantren - Full Pure White A4 Fit */
 @media print {
   @page {
     size: A4 portrait;
     margin: 0 !important;
   }
 
+  /* Universal reset for print: eliminate all decorative shadows, outlines, and extra backgrounds */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-box-shadow: none !important;
+  }
+
   html, body {
     width: 210mm !important;
     min-width: 210mm !important;
     max-width: 210mm !important;
-    height: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
+    background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    overflow: visible !important;
   }
 
-  .no-print {
+  /* Reset all outer containers so no gray, blue, or tinted container wraps the report */
+  #root,
+  #root > div,
+  main,
+  main > div,
+  .print-container-wrapper,
+  #raport-print-area {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    box-shadow: none !important;
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-width: 210mm !important;
+    transform: none !important;
+    overflow: visible !important;
+  }
+
+  /* Hide all screen-only UI elements */
+  .no-print,
+  header,
+  nav,
+  aside,
+  button,
+  .no-print * {
     display: none !important;
   }
 
+  /* Each single A4 sheet */
   .print-page {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
     box-shadow: none !important;
     border: none !important;
+    outline: none !important;
     margin: 0 auto !important;
     /* Safe inner padding so content is crisp and doesn't get cut by physical printer margins */
-    padding: 10mm 12mm 10mm 12mm !important;
+    padding: 12mm 15mm 12mm 15mm !important;
     width: 210mm !important;
     min-width: 210mm !important;
     max-width: 210mm !important;
     height: 297mm !important;
     min-height: 297mm !important;
     max-height: 297mm !important;
+    page-break-before: auto !important;
     page-break-after: always !important;
     break-after: page !important;
     page-break-inside: avoid !important;
@@ -74,9 +118,27 @@
     break-after: auto !important;
   }
 
-  /* Ensure borders and table lines stay crisp black in print */
-  table, th, td {
+  /* Table formatting: crisp black borders, transparent pure white backgrounds */
+  table {
+    border-collapse: collapse !important;
     border-color: #000000 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+  }
+
+  table tr,
+  table th,
+  table td {
+    border-color: #000000 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  /* Remove any pseudo-elements that might create decorative borders/glows */
+  .print-page::before,
+  .print-page::after {
+    display: none !important;
+    content: none !important;
   }
 }
 

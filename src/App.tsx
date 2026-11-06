@@ -891,7 +891,7 @@ export default function App() {
       : currentMenu;
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans flex flex-col print:bg-white print:min-h-0 print:p-0 print:m-0">
       {/* Top Navbar (Hidden in Print) */}
       <header className="no-print sticky top-0 z-40 bg-emerald-900 text-white shadow-md border-b border-emerald-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -1031,7 +1031,7 @@ export default function App() {
       </header>
 
       {/* Main Content View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 print:p-0 print:m-0 print:max-w-none print:w-full print:bg-white">
         {effectiveMenu === 'input-nilai' && (
           <InputNilaiView
             santriList={santriList}
